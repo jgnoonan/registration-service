@@ -103,12 +103,12 @@ public class RegistrationService {
                               final List<VerificationCodeSender> verificationCodeSenders,
                               final Clock clock,
                               final LdapService ldapService,
-                              @Value("${micronaut.registration.useldap:false}") final boolean useLdap,
-                              @Value("${micronaut.ldap.url}") final String ldapUrl,
-                              @Value("${micronaut.ldap.baseDn}") final String ldapBaseDn,
-                              @Value("${micronaut.ldap.userFilter}") final String ldapUserFilter,
-                              @Value("${micronaut.ldap.bindDn}") final String ldapBindDn,
-                              @Value("${micronaut.ldap.bindPassword}") final String ldapBindPassword) {
+                              @Value("${micronaut.registration.useldap:true}") final boolean useLdap,
+                              @Value("${micronaut.registration.ldap.url}") final String ldapUrl,
+                              @Value("${micronaut.registration.ldap.baseDn}") final String ldapBaseDn,
+                              @Value("${micronaut.registration.ldap.userFilter}") final String ldapUserFilter,
+                              @Value("${micronaut.registration.ldap.bindDn}") final String ldapBindDn,
+                              @Value("${micronaut.registration.ldap.bindPassword}") final String ldapBindPassword) {
 
     this.senderSelectionStrategy = senderSelectionStrategy;
     this.sessionRepository = sessionRepository;
