@@ -2,6 +2,10 @@
 micronaut:
   application:
     name: registrationService
+  server:
+    host: 0.0.0.0
+    port: 8080
+    http-version: 1.1
   metrics:
     binders:
       netty:
@@ -29,3 +33,8 @@ micronaut:
     level:
       ROOT: TRACE
       io.micronaut.context.env: TRACE
+      io.netty: DEBUG
+      io.micronaut.http: DEBUG
+grpc:
+  server:
+    port: 50051 # gRPC server for HTTP/2
