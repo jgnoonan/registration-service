@@ -1,23 +1,26 @@
 micronaut:
   application:
     name: registrationService
-
   metrics:
     binders:
       netty:
         queues:
           enabled: true
-
     export:
       datadog:
         enabled: false
         step: 20s
-
     tags:
-      # Note that an `instance` tag is added at runtime in `Application.java`
       service: registration
-
   executors:
     scheduled:
       type: scheduled
       core-pool-size: 16
+  registration:
+    useldap: true
+  ldap:
+    url: ldap://localhost:389
+    baseDn: dc=valuelabs,dc=com
+    userFilter: (uid={0})
+    bindDn: cn=admin,dc=valuelabs,dc=com
+    bindPassword: Rat3onal

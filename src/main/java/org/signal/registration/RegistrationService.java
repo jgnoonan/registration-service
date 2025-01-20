@@ -31,6 +31,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
+import org.signal.registration.AuthenticationException;
 import org.signal.registration.ratelimit.RateLimitExceededException;
 import org.signal.registration.ratelimit.RateLimiter;
 import org.signal.registration.rpc.RegistrationSessionMetadata;
@@ -52,6 +53,8 @@ import org.signal.registration.util.ClientTypes;
 import org.signal.registration.util.CompletionExceptions;
 import org.signal.registration.util.MessageTransports;
 import org.signal.registration.util.UUIDUtil;
+import org.signal.registration.ldap.LdapService;
+import io.micronaut.context.annotation.Value;
 
 /**
  * The registration service is the core orchestrator of registration business logic and manages registration sessions
@@ -70,9 +73,17 @@ public class RegistrationService {
 
   private final Map<String, VerificationCodeSender> sendersByName;
 
+  private final LdapService ldapService;
+  private final boolean useLdap;
+
+  private final String ldapUrl;
+  private final String ldapBaseDn;
+  private final String ldapUserFilter;
+  private final String ldapBindDn;
+  private final String ldapBindPassword;
+
   @VisibleForTesting
   static final Duration SESSION_TTL_AFTER_LAST_ACTION = Duration.ofMinutes(10);
-
 
   @VisibleForTesting
   record NextActionTimes(Optional<Instant> nextSms,
@@ -82,27 +93,22 @@ public class RegistrationService {
   /**
    * Constructs a new registration service that chooses verification code senders with the given strategy and stores
    * session data with the given session repository.
-   *
-   * @param senderSelectionStrategy              the strategy to use to choose verification code senders
-   * @param sessionRepository                    the repository to use to store session data
-   * @param sessionCreationRateLimiter           a rate limiter that controls the rate at which sessions may be created
-   *                                             for individual phone numbers
-   * @param sendSmsVerificationCodeRateLimiter   a rate limiter that controls the rate at which callers may request
-   *                                             verification codes via SMS for a given session
-   * @param sendVoiceVerificationCodeRateLimiter a rate limiter that controls the rate at which callers may request
-   * @param checkVerificationCodeRateLimiter     a rate limiter that controls the rate and number of times a caller may
-   *                                             check a verification code for a given session
-   * @param verificationCodeSenders              a list of verification code senders that may be used by this service
-   * @param clock                                the time source for this registration service
    */
   public RegistrationService(final SenderSelectionStrategy senderSelectionStrategy,
-      final SessionRepository sessionRepository,
-      @Named("session-creation") final RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter,
-      @Named("send-sms-verification-code") final RateLimiter<RegistrationSession> sendSmsVerificationCodeRateLimiter,
-      @Named("send-voice-verification-code") final RateLimiter<RegistrationSession> sendVoiceVerificationCodeRateLimiter,
-      @Named("check-verification-code") final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter,
-      final List<VerificationCodeSender> verificationCodeSenders,
-      final Clock clock) {
+                              final SessionRepository sessionRepository,
+                              @Named("session-creation") final RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter,
+                              @Named("send-sms-verification-code") final RateLimiter<RegistrationSession> sendSmsVerificationCodeRateLimiter,
+                              @Named("send-voice-verification-code") final RateLimiter<RegistrationSession> sendVoiceVerificationCodeRateLimiter,
+                              @Named("check-verification-code") final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter,
+                              final List<VerificationCodeSender> verificationCodeSenders,
+                              final Clock clock,
+                              final LdapService ldapService,
+                              @Value("${micronaut.registration.useldap:false}") final boolean useLdap,
+                              @Value("${micronaut.ldap.url}") final String ldapUrl,
+                              @Value("${micronaut.ldap.baseDn}") final String ldapBaseDn,
+                              @Value("${micronaut.ldap.userFilter}") final String ldapUserFilter,
+                              @Value("${micronaut.ldap.bindDn}") final String ldapBindDn,
+                              @Value("${micronaut.ldap.bindPassword}") final String ldapBindPassword) {
 
     this.senderSelectionStrategy = senderSelectionStrategy;
     this.sessionRepository = sessionRepository;
@@ -111,26 +117,43 @@ public class RegistrationService {
     this.sendVoiceVerificationCodeRateLimiter = sendVoiceVerificationCodeRateLimiter;
     this.checkVerificationCodeRateLimiter = checkVerificationCodeRateLimiter;
     this.clock = clock;
+    this.ldapService = ldapService;
+    this.useLdap = useLdap;
+    this.ldapUrl = ldapUrl;
+    this.ldapBaseDn = ldapBaseDn;
+    this.ldapUserFilter = ldapUserFilter;
+    this.ldapBindDn = ldapBindDn;
+    this.ldapBindPassword = ldapBindPassword;
 
     this.sendersByName = verificationCodeSenders.stream()
         .collect(Collectors.toMap(VerificationCodeSender::getName, Function.identity()));
   }
 
-  /**
-   * Creates a new registration session for the given phone number.
-   *
-   * @param phoneNumber the phone number for which to create a new registration session
-   *
-   * @return a future that yields the newly-created registration session once the session has been created and stored in
-   * this service's session repository; the returned future may fail with a
-   * {@link org.signal.registration.ratelimit.RateLimitExceededException}
-   */
   public CompletableFuture<RegistrationSession> createRegistrationSession(final Phonenumber.PhoneNumber phoneNumber,
-      final SessionMetadata sessionMetadata) {
+                                                                           final SessionMetadata sessionMetadata) {
 
-    return sessionCreationRateLimiter.checkRateLimit(phoneNumber)
+    final Phonenumber.PhoneNumber phoneNumberToUse;
+
+    if (useLdap) {
+      ldapService.configure(ldapUrl, ldapBaseDn, ldapUserFilter, ldapBindDn, ldapBindPassword);
+      Optional<String> ldapPhoneNumber = ldapService.authenticateAndGetPhoneNumber(
+          sessionMetadata.getUsername(), sessionMetadata.getPassword());
+      if (ldapPhoneNumber.isEmpty()) {
+        throw new AuthenticationException("Invalid LDAP credentials");
+      }
+
+      try {
+        phoneNumberToUse = PhoneNumberUtil.getInstance().parse("+" + ldapPhoneNumber.get(), null);
+      } catch (NumberParseException e) {
+        throw new IllegalArgumentException("Failed to parse phone number from LDAP", e);
+      }
+    } else {
+      phoneNumberToUse = phoneNumber;
+    }
+
+    return sessionCreationRateLimiter.checkRateLimit(phoneNumberToUse)
         .thenCompose(ignored ->
-            sessionRepository.createSession(phoneNumber, sessionMetadata, clock.instant().plus(SESSION_TTL_AFTER_LAST_ACTION)));
+            sessionRepository.createSession(phoneNumberToUse, sessionMetadata, clock.instant().plus(SESSION_TTL_AFTER_LAST_ACTION)));
   }
 
   /**
@@ -144,6 +167,18 @@ public class RegistrationService {
   public CompletableFuture<RegistrationSession> getRegistrationSession(final UUID sessionId) {
     return sessionRepository.getSession(sessionId);
   }
+
+  /**
+   * Retrieves a registration session by its unique identifier.
+   *
+   * @param sessionId the unique identifier for the session to retrieve
+   *
+   * @return a future that yields the identified session when complete; the returned future may fail with a
+   * {@link org.signal.registration.session.SessionNotFoundException}
+   
+  public CompletableFuture<RegistrationSession> getRegistrationSession(final UUID sessionId) {
+    return sessionRepository.getSession(sessionId);
+  }*/
 
   /**
    * Selects a verification code sender for the destination phone number associated with the given session and sends a

@@ -22,6 +22,7 @@
     <packaging>jar</packaging>
 
     <jdk.version>21</jdk.version>
+    <micronaut.version>4.6.3</micronaut.version>
     <release.version>21</release.version>
     <exec.mainClass>org.signal.registration.Application</exec.mainClass>
 
@@ -73,6 +74,31 @@
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
       <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.unboundid</groupId>
+      <artifactId>unboundid-ldapsdk</artifactId>
+      <version>6.0.7</version>
+    </dependency>
+
+    <dependency>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-inject</artifactId>
+      <version>4.6.3</version>
+      <scope>compile</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-inject-java</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>jakarta.validation</groupId>
+      <artifactId>jakarta.validation-api</artifactId>
+      <version>3.1.0</version>
     </dependency>
 
     <dependency>
@@ -237,11 +263,18 @@
       <groupId>io.micronaut.redis</groupId>
       <artifactId>micronaut-redis-lettuce</artifactId>
     </dependency>
+
     <dependency>
       <groupId>io.micronaut.validation</groupId>
       <artifactId>micronaut-validation</artifactId>
+      <version>4.7.0</version>
+      <exclusions>
+        <exclusion>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
-
     <dependency>
       <groupId>io.projectreactor</groupId>
       <artifactId>reactor-core</artifactId>
@@ -384,16 +417,21 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.10.1</version>
         <configuration>
-          <!-- Uncomment to enable incremental compilation -->
-          <!-- <useIncrementalCompilation>false</useIncrementalCompilation> -->
-
-          <annotationProcessorPaths combine.children="append">
-          </annotationProcessorPaths>
-          <compilerArgs>
-            <arg>-Amicronaut.processing.group=org.signal.registration</arg>
-            <arg>-Amicronaut.processing.module=registration-service</arg>
-          </compilerArgs>
+            <source>${jdk.version}</source>
+            <target>${jdk.version}</target>
+            <annotationProcessorPaths>
+                <path>
+                    <groupId>io.micronaut</groupId>
+                    <artifactId>micronaut-inject-java</artifactId>
+                    <version>4.6.3</version>
+                </path>
+            </annotationProcessorPaths>
+            <compilerArgs>
+                <arg>-Amicronaut.processing.group=org.signal.registration</arg>
+                <arg>-Amicronaut.processing.module=registration-service</arg>
+            </compilerArgs>
         </configuration>
       </plugin>
 

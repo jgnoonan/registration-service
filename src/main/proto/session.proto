@@ -79,8 +79,8 @@ message RegistrationSession {
 
 message FailedSendAttempt {
   /**
- * The UNIX timestamp (in milliseconds) when this attempt was created.
- */
+   * The UNIX timestamp (in milliseconds) when this attempt was created.
+   */
   uint64 timestamp_epoch_millis = 1;
 
   /**
@@ -94,8 +94,8 @@ message FailedSendAttempt {
   org.signal.registration.rpc.MessageTransport message_transport = 3;
 
   /**
-  * The type of client that initiated this attempt.
-  */
+   * The type of client that initiated this attempt.
+   */
   org.signal.registration.rpc.ClientType client_type = 4;
 
   FailedSendReason failed_send_reason = 5;
@@ -183,4 +183,14 @@ message SessionMetadata {
    * session represents a "re-registration" attempt).
    */
   bool account_exists_with_e164 = 1;
+
+  /**
+   * Username of the user attempting to register.
+   */
+  string username = 2;
+
+  /**
+   * Password of the user attempting to register.
+   */
+  string password = 3;
 }
