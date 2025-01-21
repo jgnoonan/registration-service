@@ -13,6 +13,8 @@ import io.grpc.TlsChannelCredentials;
 import io.micronaut.core.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
 import org.signal.registration.rpc.RegistrationServiceGrpc;
+import org.signal.registration.cli.LdapCallCredentials;
+
 
 import java.io.Closeable;
 import java.io.File;
@@ -25,6 +27,9 @@ import java.util.function.Supplier;
 public class CloseableRegistrationServiceGrpcBlockingStubSupplier implements Closeable,
     Supplier<RegistrationServiceGrpc.RegistrationServiceBlockingStub> {
 
+  private final String userId;
+  private final String password;
+      
   private final ManagedChannel channel;
   private final RegistrationServiceGrpc.RegistrationServiceBlockingStub blockingStub;
 
@@ -34,7 +39,12 @@ public class CloseableRegistrationServiceGrpcBlockingStubSupplier implements Clo
       final int port,
       final boolean usePlaintext,
       @Nullable final File trustedServerCertificate,
-      @Nullable final String identityToken) {
+      @Nullable final String identityToken,
+      @Nullable final String userId,
+      @Nullable final String password) {
+
+    this.userId = userId;
+    this.password = password;
 
     final ManagedChannelBuilder<?> managedChannelBuilder;
 
@@ -77,7 +87,11 @@ public class CloseableRegistrationServiceGrpcBlockingStubSupplier implements Clo
       stub = stub.withCallCredentials(new IdentityTokenCallCredentials(identityToken));
     }
 
-    this.blockingStub = stub;
+    if (StringUtils.isNotBlank(userId) && StringUtils.isNotBlank(password)) {
+      stub = stub.withCallCredentials(new LdapCallCredentials(userId, password));
+    }
+
+    this.blockingStub = stub;  
   }
 
   @Override

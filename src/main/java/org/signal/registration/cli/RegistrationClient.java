@@ -28,6 +28,20 @@ public class RegistrationClient {
       scope = CommandLine.ScopeType.INHERIT)
   private int port;
 
+  @CommandLine.Option(
+    names = {"--ldapUserId"},
+    description = "LDAP User ID (email) for authentication",
+    scope = CommandLine.ScopeType.INHERIT,
+    required = true)
+  private String ldapUserId;
+
+  @CommandLine.Option(
+    names = {"--ldapPassword"},
+    description = "Password for LDAP authentication",
+    scope = CommandLine.ScopeType.INHERIT,
+    required = true)
+  private String ldapPassword;
+
   @CommandLine.Option(names = {"--identity-token"},
       description = "OIDC identity token for this call",
       scope = CommandLine.ScopeType.INHERIT)
@@ -54,7 +68,7 @@ public class RegistrationClient {
     final File trustedServerCertificate = tlsOptions != null ? tlsOptions.trustedServerCertificate : null;
 
     return new CloseableRegistrationServiceGrpcBlockingStubSupplier(host, port, usePlaintext, trustedServerCertificate,
-        identityToken);
+        identityToken, ldapUserId, ldapPassword);
   }
 
   public static void main(final String... args) {
