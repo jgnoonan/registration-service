@@ -12,7 +12,8 @@ import java.io.File;
     CreateSession.class,
     GetSession.class,
     SendVerificationCode.class,
-    CheckVerificationCode.class
+    CheckVerificationCode.class,
+    TestLdap.class
 })
 public class RegistrationClient {
 
