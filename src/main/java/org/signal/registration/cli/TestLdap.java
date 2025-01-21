@@ -1,5 +1,14 @@
 package org.signal.registration.cli;
 
+import java.util.Hashtable;
+
+import javax.naming.NamingEnumeration;
+import javax.naming.directory.DirContext;
+import javax.naming.directory.InitialDirContext;
+import javax.naming.directory.SearchControls;
+import javax.naming.Context;
+import javax.naming.directory.*;
+
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -25,11 +34,37 @@ public class TestLdap implements Runnable {
         }
     }
 
-    private String authenticateAndRetrievePhoneNumber(String userId, String password) throws Exception {
-        // Replace this with your LDAP authentication logic
-        if ("your-email@example.com".equals(userId) && "your-password".equals(password)) {
-            return "+1234567890"; // Example phone number
-        }
-        throw new Exception("Invalid LDAP credentials");
+   private String authenticateAndRetrievePhoneNumber(String userId, String password) throws Exception {
+      Hashtable<String, String> env = new Hashtable<>();
+      env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory");
+      env.put(Context.PROVIDER_URL, "ldap://localhost:389");
+      env.put(Context.SECURITY_AUTHENTICATION, "simple");
+      env.put(Context.SECURITY_PRINCIPAL, userId);
+      env.put(Context.SECURITY_CREDENTIALS, password);
+
+      DirContext ctx = null;
+      try {
+          ctx = new InitialDirContext(env);
+
+          // Perform LDAP search to retrieve the phone number
+          String searchFilter = "(uid=" + userId + ")";
+          String searchBase = "dc=valuelabs,dc=com";
+
+          SearchControls searchControls = new SearchControls();
+          searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+
+          NamingEnumeration<SearchResult> results = ctx.search(searchBase, searchFilter, searchControls);
+
+          if (results.hasMore()) {
+              Attributes attributes = results.next().getAttributes();
+              return attributes.get("telephoneNumber").get().toString();
+          } else {
+              throw new Exception("No user found");
+          }
+      } finally {
+          if (ctx != null) {
+              ctx.close();
+          }
+      }
     }
 }

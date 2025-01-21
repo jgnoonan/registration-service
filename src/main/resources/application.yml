@@ -10,7 +10,7 @@ micronaut:
     binders:
       netty:
         queues:
-          enabled: true
+          enabled: false
     export:
       datadog:
         enabled: false
@@ -21,6 +21,20 @@ micronaut:
     scheduled:
       type: scheduled
       core-pool-size: 16
+  rate-limits:
+    check-verification-code:
+      delays: 60s
+    leaky-bucket:
+      session-creation:
+        name: registration
+        max-capacity: 100
+        permit-regeneration-period: 10s
+        min-delay: 25s
+    send-sms-verification-code:
+      delays: 10s
+    send-voice-verification-code:
+      delay-after-first-sms: 120s
+      delays: 60s
   registration:
     useldap: true
     ldap:
@@ -29,12 +43,7 @@ micronaut:
       userFilter: (uid={0})
       bindDn: cn=admin,dc=valuelabs,dc=com
       bindPassword: Rat3onal
-  logging:
-    level:
-      ROOT: TRACE
-      io.micronaut.context.env: TRACE
-      io.netty: DEBUG
-      io.micronaut.http: DEBUG
 grpc:
   server:
-    port: 50051 # gRPC server for HTTP/2
+    endpoint: localhost
+    port: 50051
