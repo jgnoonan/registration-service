@@ -1,10 +1,9 @@
 package org.signal.registration.ldap;
 
 import com.unboundid.ldap.sdk.*;
+import com.unboundid.util.ssl.JVMDefaultTrustManager;
 import com.unboundid.util.ssl.SSLUtil;
-import com.unboundid.util.ssl.TrustAllTrustManager;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import com.unboundid.util.ssl.TrustStoreTrustManager;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,18 +22,16 @@ public class LdapService {
         this.ldapConfiguration = ldapConfiguration;
     }
 
-    @PostConstruct
-    public void initialize() {
+    public void initialize() throws LDAPException {
+        LDAPConnection connection = createConnection();
         try {
-            LDAPConnection connection = createConnection();
-            connectionPool = new LDAPConnectionPool(connection, 
-                ldapConfiguration.getMinPoolSize(), 
-                ldapConfiguration.getMaxPoolSize());
+            connection.bind(ldapConfiguration.getBindDn(), ldapConfiguration.getBindPassword());
+            connectionPool = new LDAPConnectionPool(connection,
+                    ldapConfiguration.getMinPoolSize(),
+                    ldapConfiguration.getMaxPoolSize());
             connectionPool.setMaxWaitTimeMillis(ldapConfiguration.getPoolTimeout());
-            LOG.info("LDAP connection pool initialized successfully");
-        } catch (LDAPException e) {
-            LOG.error("Failed to initialize LDAP connection pool", e);
-            throw new RuntimeException("Failed to initialize LDAP connection pool", e);
+        } finally {
+            connection.close();
         }
     }
 
@@ -43,110 +40,102 @@ public class LdapService {
         String host = hostParts[0];
         int port = hostParts.length > 1 ? Integer.parseInt(hostParts[1]) : ldapConfiguration.getPort();
 
+        LDAPConnectionOptions options = new LDAPConnectionOptions();
+        options.setConnectTimeoutMillis(ldapConfiguration.getConnectionTimeout());
+        options.setResponseTimeoutMillis(ldapConfiguration.getReadTimeout());
+
         LDAPConnection connection;
         if (ldapConfiguration.isUseSsl()) {
             try {
-                SSLUtil sslUtil = new SSLUtil(new TrustAllTrustManager());
+                // Use configured trust store instead of trusting all
+                SSLUtil sslUtil;
+                if (ldapConfiguration.getTrustStorePath() != null) {
+                    sslUtil = new SSLUtil(new TrustStoreTrustManager(
+                        ldapConfiguration.getTrustStorePath(),
+                        ldapConfiguration.getTrustStorePassword().toCharArray(),
+                        "JKS",
+                        true
+                    ));
+                } else {
+                    // Fallback to default system trust store
+                    sslUtil = new SSLUtil(new JVMDefaultTrustManager());
+                }
                 SSLSocketFactory sslSocketFactory = sslUtil.createSSLSocketFactory();
-                connection = new LDAPConnection(sslSocketFactory, host, port);
+                connection = new LDAPConnection(sslSocketFactory, options, host, port);
             } catch (GeneralSecurityException e) {
                 throw new LDAPException(ResultCode.CONNECT_ERROR, 
                     "Failed to create SSL connection", e);
             }
         } else {
-            connection = new LDAPConnection(host, port);
+            connection = new LDAPConnection(options, host, port);
         }
 
-        connection.setConnectTimeout(ldapConfiguration.getConnectionTimeout());
-        connection.setResponseTimeoutMillis(ldapConfiguration.getReadTimeout());
         return connection;
     }
 
     public Optional<String> authenticateAndGetPhoneNumber(String username, String password) {
-        LDAPConnection connection = null;
         int retryCount = 0;
-        
-        while (retryCount < ldapConfiguration.getMaxRetries()) {
+        while (true) {
             try {
-                connection = connectionPool.getConnection();
-                
-                // Bind with service account first
-                connection.bind(ldapConfiguration.getBindDn(), 
-                    ldapConfiguration.getBindPassword());
-                
-                // Search for user DN
-                String userDn = findUserDn(connection, username);
-                if (userDn == null) {
-                    LOG.warn("User not found: {}", username);
-                    return Optional.empty();
-                }
-                
-                // Authenticate user
-                try {
-                    connection.bind(userDn, password);
-                } catch (LDAPException e) {
-                    LOG.warn("Authentication failed for user: {}", username, e);
-                    return Optional.empty();
-                }
-                
-                // Search for phone number
-                return findPhoneNumber(connection, username);
-                
+                return tryAuthenticateAndGetPhoneNumber(username, password);
             } catch (LDAPException e) {
-                LOG.error("LDAP operation failed (attempt {}/{})", 
-                    retryCount + 1, ldapConfiguration.getMaxRetries(), e);
-                if (!isRetryableError(e) || retryCount >= ldapConfiguration.getMaxRetries() - 1) {
-                    throw new RuntimeException("LDAP operation failed", e);
+                if (!isRetryableError(e) || retryCount >= ldapConfiguration.getMaxRetries()) {
+                    LOG.error("LDAP authentication failed", e);
+                    return Optional.empty();
                 }
-                retryCount++;
-                try {
-                    Thread.sleep(1000 * retryCount); // Exponential backoff
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Interrupted during retry", ie);
-                }
-            } finally {
-                if (connection != null) {
-                    connectionPool.releaseConnection(connection);
-                }
+                backoff(retryCount++);
             }
         }
-        return Optional.empty();
     }
 
-    private String findUserDn(LDAPConnection connection, String username) 
-            throws LDAPException {
-        SearchResult searchResult = connection.search(
+    private Optional<String> tryAuthenticateAndGetPhoneNumber(String username, String password) throws LDAPException {
+        LDAPConnection connection = connectionPool.getConnection();
+        try {
+            String userDn = findUserDn(connection, username);
+            if (userDn == null) {
+                return Optional.empty();
+            }
+
+            // Verify password by binding
+            connection.bind(userDn, password);
+
+            // Get phone number
+            return findPhoneNumber(connection, username);
+        } finally {
+            connectionPool.releaseConnection(connection);
+        }
+    }
+
+    private String findUserDn(LDAPConnection connection, String username) throws LDAPException {
+        SearchResultEntry entry = connection.searchForEntry(
             ldapConfiguration.getBaseDn(),
             SearchScope.SUB,
-            ldapConfiguration.getUserFilter().replace("{0}", 
-                Filter.encodeValue(username)),
+            String.format(ldapConfiguration.getUserFilter(), username),
             "dn"
         );
-        
-        if (!searchResult.getSearchEntries().isEmpty()) {
-            return searchResult.getSearchEntries().get(0).getDN();
-        }
-        return null;
+        return entry != null ? entry.getDN() : null;
     }
 
-    private Optional<String> findPhoneNumber(LDAPConnection connection, String username) 
-            throws LDAPException {
-        SearchResult searchResult = connection.search(
+    private Optional<String> findPhoneNumber(LDAPConnection connection, String username) throws LDAPException {
+        SearchResultEntry entry = connection.searchForEntry(
             ldapConfiguration.getBaseDn(),
             SearchScope.SUB,
-            ldapConfiguration.getUserFilter().replace("{0}", 
-                Filter.encodeValue(username)),
+            String.format(ldapConfiguration.getUserFilter(), username),
             ldapConfiguration.getPhoneNumberAttribute()
         );
-        
-        if (!searchResult.getSearchEntries().isEmpty()) {
-            String phoneNumber = searchResult.getSearchEntries().get(0)
-                .getAttributeValue(ldapConfiguration.getPhoneNumberAttribute());
-            LOG.debug("Found phone number for user: {}", username);
-            return Optional.ofNullable(phoneNumber);
+        if (entry == null) {
+            return Optional.empty();
         }
-        return Optional.empty();
+        String phoneNumber = entry.getAttributeValue(ldapConfiguration.getPhoneNumberAttribute());
+        return Optional.ofNullable(phoneNumber);
+    }
+
+    private void backoff(int retryCount) {
+        try {
+            Thread.sleep((long) Math.pow(2, retryCount) * 100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private boolean isRetryableError(LDAPException e) {
@@ -155,7 +144,6 @@ public class LdapService {
                e.getResultCode() == ResultCode.TIMEOUT;
     }
 
-    @PreDestroy
     public void cleanup() {
         if (connectionPool != null) {
             connectionPool.close();
