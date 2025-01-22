@@ -63,6 +63,7 @@ import org.signal.registration.session.SessionNotFoundException;
 import org.signal.registration.session.SessionRepository;
 import org.signal.registration.util.CompletionExceptions;
 import org.signal.registration.util.UUIDUtil;
+import org.signal.registration.ldap.LdapService;
 
 class RegistrationServiceTest {
 
@@ -76,6 +77,7 @@ class RegistrationServiceTest {
   private RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter;
   private Clock clock;
   private SenderSelectionStrategy senderSelectionStrategy;
+  private LdapService ldapService;
 
   private static final Phonenumber.PhoneNumber PHONE_NUMBER = PhoneNumberUtil.getInstance().getExampleNumber("US");
   private static final String SENDER_NAME = "mock-sender";
@@ -126,6 +128,8 @@ class RegistrationServiceTest {
     when(checkVerificationCodeRateLimiter.getTimeOfNextAction(any()))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(CURRENT_TIME)));
 
+    ldapService = mock(LdapService.class);
+
     registrationService = new RegistrationService(senderSelectionStrategy,
         sessionRepository,
         sessionCreationRateLimiter,
@@ -133,7 +137,15 @@ class RegistrationServiceTest {
         sendVoiceVerificationCodeRateLimiter,
         checkVerificationCodeRateLimiter,
         List.of(sender),
-        clock);
+        clock,
+        ldapService,
+        true,  // useLdap
+        "ldap://test.example.com",  // ldapUrl
+        "dc=test,dc=example,dc=com",   // ldapBaseDn
+        "(objectClass=person)", // ldapUserFilter
+        "cn=admin,dc=test,dc=example,dc=com", // ldapBindDn
+        "test-password"  // ldapBindPassword
+    );
   }
 
   @Test
@@ -513,8 +525,6 @@ class RegistrationServiceTest {
         .setPhoneNumber(PhoneNumberUtil.getInstance().format(PHONE_NUMBER, PhoneNumberUtil.PhoneNumberFormat.E164))
         .addRegistrationAttempts(RegistrationAttempt.newBuilder()
             .setMessageTransport(org.signal.registration.rpc.MessageTransport.MESSAGE_TRANSPORT_SMS)
-            .setSenderName(SENDER_NAME)
-            .setSenderData(ByteString.copyFrom(VERIFICATION_CODE_BYTES))
             .setExpirationEpochMillis(CURRENT_TIME.toEpochMilli() + 1)
             .build())
         .build();
@@ -549,8 +559,6 @@ class RegistrationServiceTest {
         .setPhoneNumber(PhoneNumberUtil.getInstance().format(PHONE_NUMBER, PhoneNumberUtil.PhoneNumberFormat.E164))
         .addRegistrationAttempts(RegistrationAttempt.newBuilder()
             .setMessageTransport(org.signal.registration.rpc.MessageTransport.MESSAGE_TRANSPORT_SMS)
-            .setSenderName(SENDER_NAME)
-            .setSenderData(ByteString.copyFrom(VERIFICATION_CODE_BYTES))
             .setExpirationEpochMillis(CURRENT_TIME.toEpochMilli() - 1)
             .build())
         .build();

@@ -2,7 +2,6 @@
  * Copyright 2022 Signal Messenger, LLC
  * SPDX-License-Identifier: AGPL-3.0-only
  */
-
 package org.signal.registration;
 
 import static org.signal.registration.sender.SenderSelectionStrategy.SenderSelection;
@@ -12,6 +11,7 @@ import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.protobuf.ByteString;
+import jakarta.annotation.PostConstruct;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import java.time.Clock;
@@ -55,13 +55,12 @@ import org.signal.registration.util.MessageTransports;
 import org.signal.registration.util.UUIDUtil;
 import org.signal.registration.ldap.LdapService;
 import io.micronaut.context.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/**
- * The registration service is the core orchestrator of registration business logic and manages registration sessions
- * and verification code sender selection.
- */
 @Singleton
 public class RegistrationService {
+  private static final Logger LOG = LoggerFactory.getLogger(RegistrationService.class);
 
   private final SenderSelectionStrategy senderSelectionStrategy;
   private final SessionRepository sessionRepository;
@@ -70,45 +69,28 @@ public class RegistrationService {
   private final RateLimiter<RegistrationSession> sendVoiceVerificationCodeRateLimiter;
   private final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter;
   private final Clock clock;
-
   private final Map<String, VerificationCodeSender> sendersByName;
-
   private final LdapService ldapService;
   private final boolean useLdap;
-
-  private final String ldapUrl;
-  private final String ldapBaseDn;
-  private final String ldapUserFilter;
-  private final String ldapBindDn;
-  private final String ldapBindPassword;
 
   @VisibleForTesting
   static final Duration SESSION_TTL_AFTER_LAST_ACTION = Duration.ofMinutes(10);
 
   @VisibleForTesting
   record NextActionTimes(Optional<Instant> nextSms,
-                         Optional<Instant> nextVoiceCall,
-                         Optional<Instant> nextCodeCheck) {}
+                        Optional<Instant> nextVoiceCall,
+                        Optional<Instant> nextCodeCheck) {}
 
-  /**
-   * Constructs a new registration service that chooses verification code senders with the given strategy and stores
-   * session data with the given session repository.
-   */
   public RegistrationService(final SenderSelectionStrategy senderSelectionStrategy,
-                              final SessionRepository sessionRepository,
-                              @Named("session-creation") final RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter,
-                              @Named("send-sms-verification-code") final RateLimiter<RegistrationSession> sendSmsVerificationCodeRateLimiter,
-                              @Named("send-voice-verification-code") final RateLimiter<RegistrationSession> sendVoiceVerificationCodeRateLimiter,
-                              @Named("check-verification-code") final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter,
-                              final List<VerificationCodeSender> verificationCodeSenders,
-                              final Clock clock,
-                              final LdapService ldapService,
-                              @Value("${micronaut.registration.useldap:true}") final boolean useLdap,
-                              @Value("${micronaut.registration.ldap.url}") final String ldapUrl,
-                              @Value("${micronaut.registration.ldap.baseDn}") final String ldapBaseDn,
-                              @Value("${micronaut.registration.ldap.userFilter}") final String ldapUserFilter,
-                              @Value("${micronaut.registration.ldap.bindDn}") final String ldapBindDn,
-                              @Value("${micronaut.registration.ldap.bindPassword}") final String ldapBindPassword) {
+                           final SessionRepository sessionRepository,
+                           @Named("session-creation") final RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter,
+                           @Named("send-sms-verification-code") final RateLimiter<RegistrationSession> sendSmsVerificationCodeRateLimiter,
+                           @Named("send-voice-verification-code") final RateLimiter<RegistrationSession> sendVoiceVerificationCodeRateLimiter,
+                           @Named("check-verification-code") final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter,
+                           final List<VerificationCodeSender> verificationCodeSenders,
+                           final Clock clock,
+                           final LdapService ldapService,
+                           @Value("${micronaut.registration.useldap:true}") final boolean useLdap) {
 
     this.senderSelectionStrategy = senderSelectionStrategy;
     this.sessionRepository = sessionRepository;
@@ -119,32 +101,37 @@ public class RegistrationService {
     this.clock = clock;
     this.ldapService = ldapService;
     this.useLdap = useLdap;
-    this.ldapUrl = ldapUrl;
-    this.ldapBaseDn = ldapBaseDn;
-    this.ldapUserFilter = ldapUserFilter;
-    this.ldapBindDn = ldapBindDn;
-    this.ldapBindPassword = ldapBindPassword;
 
     this.sendersByName = verificationCodeSenders.stream()
         .collect(Collectors.toMap(VerificationCodeSender::getName, Function.identity()));
   }
 
-  public CompletableFuture<RegistrationSession> createRegistrationSession(final Phonenumber.PhoneNumber phoneNumber,
-                                                                           final SessionMetadata sessionMetadata) {
+  @PostConstruct
+  public void initialize() {
+    if (useLdap) {
+      LOG.info("Initializing LDAP service");
+      ldapService.initialize();
+    }
+  }
 
+  public CompletableFuture<RegistrationSession> createRegistrationSession(final Phonenumber.PhoneNumber phoneNumber,
+                                                                        final SessionMetadata sessionMetadata) {
     final Phonenumber.PhoneNumber phoneNumberToUse;
 
     if (useLdap) {
-      ldapService.configure(ldapUrl, ldapBaseDn, ldapUserFilter, ldapBindDn, ldapBindPassword);
+      LOG.debug("Authenticating user via LDAP: {}", sessionMetadata.getUsername());
       Optional<String> ldapPhoneNumber = ldapService.authenticateAndGetPhoneNumber(
           sessionMetadata.getUsername(), sessionMetadata.getPassword());
       if (ldapPhoneNumber.isEmpty()) {
+        LOG.warn("LDAP authentication failed for user: {}", sessionMetadata.getUsername());
         throw new AuthenticationException("Invalid LDAP credentials");
       }
 
       try {
         phoneNumberToUse = PhoneNumberUtil.getInstance().parse("+" + ldapPhoneNumber.get(), null);
+        LOG.debug("Successfully retrieved phone number from LDAP for user: {}", sessionMetadata.getUsername());
       } catch (NumberParseException e) {
+        LOG.error("Failed to parse phone number from LDAP for user: {}", sessionMetadata.getUsername(), e);
         throw new IllegalArgumentException("Failed to parse phone number from LDAP", e);
       }
     } else {

@@ -27,8 +27,8 @@ import java.util.function.Supplier;
 public class CloseableRegistrationServiceGrpcBlockingStubSupplier implements Closeable,
     Supplier<RegistrationServiceGrpc.RegistrationServiceBlockingStub> {
 
-  private final String userId;
-  private final String password;
+  private final String ldapUserId;
+  private final String ldapPassword;
       
   private final ManagedChannel channel;
   private final RegistrationServiceGrpc.RegistrationServiceBlockingStub blockingStub;
@@ -40,11 +40,11 @@ public class CloseableRegistrationServiceGrpcBlockingStubSupplier implements Clo
       final boolean usePlaintext,
       @Nullable final File trustedServerCertificate,
       @Nullable final String identityToken,
-      @Nullable final String userId,
-      @Nullable final String password) {
+      @Nullable final String ldapUserId,
+      @Nullable final String ldapPassword) {
 
-    this.userId = userId;
-    this.password = password;
+    this.ldapUserId = ldapUserId;
+    this.ldapPassword = ldapPassword;
 
     final ManagedChannelBuilder<?> managedChannelBuilder;
 
@@ -87,8 +87,8 @@ public class CloseableRegistrationServiceGrpcBlockingStubSupplier implements Clo
       stub = stub.withCallCredentials(new IdentityTokenCallCredentials(identityToken));
     }
 
-    if (StringUtils.isNotBlank(userId) && StringUtils.isNotBlank(password)) {
-      stub = stub.withCallCredentials(new LdapCallCredentials(userId, password));
+    if (StringUtils.isNotBlank(ldapUserId) && StringUtils.isNotBlank(ldapPassword)) {
+      stub = stub.withCallCredentials(new LdapCallCredentials(ldapUserId, ldapPassword));
     }
 
     this.blockingStub = stub;  
