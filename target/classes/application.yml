@@ -2,10 +2,13 @@
 micronaut:
   application:
     name: registrationService
+  environments:
+    development:
+      environments: true
   server:
     host: 0.0.0.0
     port: 8080
-    http-version: 1.1
+    httpVersion: 1.1
   metrics:
     binders:
       netty:
@@ -20,38 +23,50 @@ micronaut:
   executors:
     scheduled:
       type: scheduled
-      core-pool-size: 16
-  rate-limits:
-    check-verification-code:
+      corePoolSize: 16
+  rateLimits:
+    checkVerificationCode:
       delays: 60s
-    leaky-bucket:
-      session-creation:
+    leakyBucket:
+      sessionCreation:
         name: registration
-        max-capacity: 100
-        permit-regeneration-period: 10s
-        min-delay: 25s
-    send-sms-verification-code:
+        maxCapacity: 100
+        permitRegenerationPeriod: 10s
+        minDelay: 25s
+    sendSmsVerificationCode:
       delays: 10s
-    send-voice-verification-code:
-      delay-after-first-sms: 120s
+    sendVoiceVerificationCode:
+      delayAfterFirstSms: 120s
       delays: 60s
-  registration:
-    useldap: true
-    ldap:
-      # LDAP server connection settings
-      url: ldap://localhost:389
-      baseDn: dc=valuelabs,dc=com
-      userFilter: (uid={0})
-      bindDn: cn=admin,dc=valuelabs,dc=com
-      bindPassword: Rat3onal
-      
-      # Phone number attribute configuration
-      # Common attribute names:
-      # - mobile: Common in Active Directory for mobile numbers
-      # - telephoneNumber: Standard LDAP attribute for primary phone
-      # - otherMobile: Additional mobile numbers in AD
-      # - homePhone: Home telephone number
-      phoneNumberAttribute: mobile
+  config:
+    registration:
+      useLdap: true
+      ldap:
+        # LDAP server connection settings
+        url: ldap://localhost:389
+        baseDn: dc=valuelabs,dc=com
+        useSsl: false
+        minPoolSize: 3
+        maxPoolSize: 10
+        timeout: 300000
+        userFilter: (uid={0})
+        bindDn: cn=admin,dc=valuelabs,dc=com
+        bindPassword: Rat3onal
+        phoneNumberAttribute: mobile
+        testPhoneNumber: +12025550123
+
+selection:
+  sms:
+    transport: SMS
+    fallbackSenders: ["last-digits-of-phone-number"]
+    defaultWeights:
+      last-digits-of-phone-number: 100
+  voice:
+    transport: VOICE
+    fallbackSenders: ["last-digits-of-phone-number"]
+    defaultWeights:
+      last-digits-of-phone-number: 100
+
 grpc:
   server:
     endpoint: localhost

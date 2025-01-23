@@ -30,17 +30,15 @@ public class RegistrationClient {
   private int port;
 
   @CommandLine.Option(
-    names = {"--ldapUserId"},
+    names = {"--userId"},
     description = "LDAP User ID (email) for authentication",
-    scope = CommandLine.ScopeType.INHERIT,
-    required = true)
+    scope = CommandLine.ScopeType.INHERIT)
   private String ldapUserId;
 
   @CommandLine.Option(
-    names = {"--ldapPassword"},
+    names = {"--password"},
     description = "Password for LDAP authentication",
-    scope = CommandLine.ScopeType.INHERIT,
-    required = true)
+    scope = CommandLine.ScopeType.INHERIT)
   private String ldapPassword;
 
   @CommandLine.Option(names = {"--identity-token"},

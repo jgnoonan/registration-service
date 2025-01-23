@@ -1,0 +1,4 @@
+dn: uid=raja,ou=users,dc=valuelabs,dc=com
+changetype: modify
+replace: userPassword
+userPassword: Rat3onal

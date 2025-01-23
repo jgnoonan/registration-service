@@ -5,29 +5,57 @@
 package org.signal.registration.ldap;
 
 import io.micronaut.context.annotation.ConfigurationProperties;
+import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Singleton
-@ConfigurationProperties("micronaut.registration.ldap")
+@ConfigurationProperties("micronaut.config.registration.ldap")
 public class LdapConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(LdapConfiguration.class);
 
+    @Value("${micronaut.config.registration.ldap.url}")
     private String url;
+
+    @Value("${micronaut.config.registration.ldap.baseDn}")
     private String baseDn;
+
+    @Value("${micronaut.config.registration.ldap.userFilter:(uid={0})}")
     private String userFilter;
+
+    @Value("${micronaut.config.registration.ldap.bindDn:}")
     private String bindDn;
+
+    @Value("${micronaut.config.registration.ldap.bindPassword:}")
     private String bindPassword;
-    private int port = 389;
-    private boolean useSsl = false;
-    private int connectionTimeout = 5000;
-    private int readTimeout = 30000;
-    private int maxPoolSize = 10;
-    private int minPoolSize = 3;
-    private long poolTimeout = 300000;
-    private int maxRetries = 3;
-    private String phoneNumberAttribute = "telephoneNumber";
+
+    @Value("${micronaut.config.registration.ldap.phoneNumberAttribute:mobile}")
+    private String phoneNumberAttribute;
+
+    @Value("${micronaut.config.registration.ldap.port:389}")
+    private int port;
+
+    @Value("${micronaut.config.registration.ldap.useSsl:false}")
+    private boolean useSsl;
+
+    @Value("${micronaut.config.registration.ldap.connectionTimeout:5000}")
+    private int connectionTimeout;
+
+    @Value("${micronaut.config.registration.ldap.readTimeout:30000}")
+    private int readTimeout;
+
+    @Value("${micronaut.config.registration.ldap.minPoolSize:3}")
+    private int minPoolSize;
+
+    @Value("${micronaut.config.registration.ldap.maxPoolSize:10}")
+    private int maxPoolSize;
+
+    @Value("${micronaut.config.registration.ldap.poolTimeout:300000}")
+    private long poolTimeout;
+
+    @Value("${micronaut.config.registration.ldap.maxRetries:3}")
+    private int maxRetries;
 
     // Existing getters/setters
     public String getUrl() {
@@ -113,20 +141,20 @@ public class LdapConfiguration {
         this.readTimeout = readTimeout;
     }
 
-    public int getMaxPoolSize() {
-        return maxPoolSize;
-    }
-
-    public void setMaxPoolSize(int maxPoolSize) {
-        this.maxPoolSize = maxPoolSize;
-    }
-
     public int getMinPoolSize() {
         return minPoolSize;
     }
 
     public void setMinPoolSize(int minPoolSize) {
         this.minPoolSize = minPoolSize;
+    }
+
+    public int getMaxPoolSize() {
+        return maxPoolSize;
+    }
+
+    public void setMaxPoolSize(int maxPoolSize) {
+        this.maxPoolSize = maxPoolSize;
     }
 
     public long getPoolTimeout() {

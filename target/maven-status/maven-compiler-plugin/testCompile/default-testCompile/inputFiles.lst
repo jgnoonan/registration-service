@@ -25,11 +25,13 @@
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/sender/VerificationCodeGeneratorTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/util/CompletionExceptionsTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/ratelimit/FixedDelayRegistrationSessionRateLimiterTest.java
+/Users/jgnoonan/registration-service/src/test/java/org/signal/registration/ldap/LdapAuthenticationTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/sender/messagebird/classic/MessageBirdVoiceSenderTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/analytics/messagebird/AbstractMessageBirdAttemptAnalyzerTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/IntegrationTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/sender/twilio/classic/TwilioMessagingServiceSmsSenderTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/rpc/RegistrationServiceGrpcEndpointTest.java
+/Users/jgnoonan/registration-service/src/test/java/org/signal/registration/ldap/LdapTestServer.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/analytics/gcp/pubsub/GcpPubSubAttemptAnalyzedEventListenerTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/sender/VerificationSmsBodyLengthTest.java
 /Users/jgnoonan/registration-service/src/test/java/org/signal/registration/session/bigtable/BigtableSessionRepositoryTest.java

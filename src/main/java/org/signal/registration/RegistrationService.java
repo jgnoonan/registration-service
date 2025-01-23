@@ -91,7 +91,7 @@ public class RegistrationService {
                            final List<VerificationCodeSender> verificationCodeSenders,
                            final Clock clock,
                            final LdapService ldapService,
-                           @Value("${micronaut.registration.useldap:true}") final boolean useLdap) {
+                           @Value("${micronaut.config.registration.useLdap:true}") final boolean useLdapEnabled) {
 
     this.senderSelectionStrategy = senderSelectionStrategy;
     this.sessionRepository = sessionRepository;
@@ -101,7 +101,7 @@ public class RegistrationService {
     this.checkVerificationCodeRateLimiter = checkVerificationCodeRateLimiter;
     this.clock = clock;
     this.ldapService = ldapService;
-    this.useLdap = useLdap;
+    this.useLdap = useLdapEnabled;
 
     this.sendersByName = verificationCodeSenders.stream()
         .collect(Collectors.toMap(VerificationCodeSender::getName, Function.identity()));

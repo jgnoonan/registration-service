@@ -1,0 +1,73 @@
+# extended LDIF
+#
+# LDAPv3
+# base <dc=valuelabs,dc=com> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+# valuelabs.com
+dn: dc=valuelabs,dc=com
+objectClass: top
+objectClass: domain
+dc: valuelabs
+
+# users, valuelabs.com
+dn: ou=users,dc=valuelabs,dc=com
+objectClass: top
+objectClass: organizationalUnit
+ou: users
+
+# raja, users, valuelabs.com
+dn: uid=raja,ou=users,dc=valuelabs,dc=com
+objectClass: inetOrgPerson
+cn: Raja
+sn: Raja
+uid: raja
+mail: raja@valuelabs.com
+homePhone: +919703804045
+userPassword:: e1NTSEF9a1V4eis2V2xxVWVTR2N2Z0xvbkYxZmt3ZkEwUndpTTI=
+mobile: +919703804045
+
+# naresh, users, valuelabs.com
+dn: uid=naresh,ou=users,dc=valuelabs,dc=com
+objectClass: inetOrgPerson
+cn: Naresh
+sn: Naresh
+uid: naresh
+mail: naresh@valuelabs.com
+userPassword:: e1NIQTI1Nn10bUpjVnUrVjlVL2JvMzRnVkRwa0huSFA3T1NxT3BHcEdjaGU3RkJ
+ nMmt3PQ==
+
+# sohel, users, valuelabs.com
+dn: uid=sohel,ou=users,dc=valuelabs,dc=com
+objectClass: inetOrgPerson
+cn: Sohel
+sn: Sohel
+uid: sohel
+mail: sohel@valuelabs.com
+userPassword:: e1NIQTI1Nn10bUpjVnUrVjlVL2JvMzRnVkRwa0huSFA3T1NxT3BHcEdjaGU3RkJ
+ nMmt3PQ==
+
+# groups, valuelabs.com
+dn: ou=groups,dc=valuelabs,dc=com
+objectClass: top
+objectClass: organizationalUnit
+ou: groups
+
+# signal-users, groups, valuelabs.com
+dn: cn=signal-users,ou=groups,dc=valuelabs,dc=com
+objectClass: top
+objectClass: groupOfNames
+cn: signal-users
+description: Group for Signal users
+member: uid=raja,ou=users,dc=valuelabs,dc=com
+member: uid=naresh,ou=users,dc=valuelabs,dc=com
+member: uid=sohel,ou=users,dc=valuelabs,dc=com
+
+# search result
+search: 2
+result: 0 Success
+
+# numResponses: 8
+# numEntries: 7

@@ -91,6 +91,10 @@ class RegistrationServiceTest {
   private static final SessionMetadata SESSION_METADATA = SessionMetadata.newBuilder().build();
   private static final Instant CURRENT_TIME = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
+  private static final String TEST_USERNAME = "raja@valuelabs.com";
+  private static final String TEST_PASSWORD = "Rat3onal";
+  private static final String TEST_PHONE = "+12025550123";
+
   @SuppressWarnings("unchecked")
 @BeforeEach
   void setUp() {
@@ -139,7 +143,7 @@ class RegistrationServiceTest {
         List.of(sender),
         clock,
         ldapService,
-        true  // useLdap
+        false  // useLdap disabled for tests
     );
   }
 
@@ -904,5 +908,140 @@ class RegistrationServiceTest {
             CURRENT_TIME.plus(RegistrationService.SESSION_TTL_AFTER_LAST_ACTION)
         )
     );
+  }
+
+  @Test
+  void createSessionWithLdapAuthentication() {
+    // Configure LDAP mock to return a valid phone number
+    when(ldapService.authenticateAndGetPhoneNumber(TEST_USERNAME, TEST_PASSWORD))
+        .thenReturn(Optional.of(TEST_PHONE));
+
+    // Create session metadata with LDAP credentials
+    SessionMetadata metadata = SessionMetadata.newBuilder()
+        .setUsername(TEST_USERNAME)
+        .setPassword(TEST_PASSWORD)
+        .build();
+
+    // Create session with LDAP enabled
+    registrationService = new RegistrationService(
+        senderSelectionStrategy,
+        sessionRepository,
+        sessionCreationRateLimiter,
+        sendSmsVerificationCodeRateLimiter,
+        sendVoiceVerificationCodeRateLimiter,
+        checkVerificationCodeRateLimiter,
+        List.of(sender),
+        clock,
+        ldapService,
+        true  // Enable LDAP
+    );
+
+    final RegistrationSession session = registrationService.createRegistrationSession(PHONE_NUMBER, metadata).join();
+
+    // Verify LDAP was called
+    verify(ldapService).authenticateAndGetPhoneNumber(TEST_USERNAME, TEST_PASSWORD);
+
+    // Verify session was created with LDAP phone number
+    assertEquals("+12025550123", session.getPhoneNumber());
+  }
+
+  @Test
+  void createSessionWithInvalidLdapCredentials() {
+    // Configure LDAP mock to return empty (authentication failure)
+    when(ldapService.authenticateAndGetPhoneNumber(TEST_USERNAME, TEST_PASSWORD))
+        .thenReturn(Optional.empty());
+
+    // Create session metadata with LDAP credentials
+    SessionMetadata metadata = SessionMetadata.newBuilder()
+        .setUsername(TEST_USERNAME)
+        .setPassword(TEST_PASSWORD)
+        .build();
+
+    // Create session with LDAP enabled
+    registrationService = new RegistrationService(
+        senderSelectionStrategy,
+        sessionRepository,
+        sessionCreationRateLimiter,
+        sendSmsVerificationCodeRateLimiter,
+        sendVoiceVerificationCodeRateLimiter,
+        checkVerificationCodeRateLimiter,
+        List.of(sender),
+        clock,
+        ldapService,
+        true  // Enable LDAP
+    );
+
+    // Verify authentication failure
+    assertThrows(AuthenticationException.class, () -> 
+        registrationService.createRegistrationSession(PHONE_NUMBER, metadata).join());
+
+    // Verify LDAP was called
+    verify(ldapService).authenticateAndGetPhoneNumber(TEST_USERNAME, TEST_PASSWORD);
+  }
+
+  @Test
+  void createSessionWithInvalidLdapPhoneNumber() {
+    // Configure LDAP mock to return invalid phone number
+    when(ldapService.authenticateAndGetPhoneNumber(TEST_USERNAME, TEST_PASSWORD))
+        .thenReturn(Optional.of("not-a-phone-number"));
+
+    // Create session metadata with LDAP credentials
+    SessionMetadata metadata = SessionMetadata.newBuilder()
+        .setUsername(TEST_USERNAME)
+        .setPassword(TEST_PASSWORD)
+        .build();
+
+    // Create session with LDAP enabled
+    registrationService = new RegistrationService(
+        senderSelectionStrategy,
+        sessionRepository,
+        sessionCreationRateLimiter,
+        sendSmsVerificationCodeRateLimiter,
+        sendVoiceVerificationCodeRateLimiter,
+        checkVerificationCodeRateLimiter,
+        List.of(sender),
+        clock,
+        ldapService,
+        true  // Enable LDAP
+    );
+
+    // Verify phone number parsing failure
+    assertThrows(IllegalArgumentException.class, () -> 
+        registrationService.createRegistrationSession(PHONE_NUMBER, metadata).join());
+
+    // Verify LDAP was called
+    verify(ldapService).authenticateAndGetPhoneNumber(TEST_USERNAME, TEST_PASSWORD);
+  }
+
+  @Test
+  void createSessionWithLdapDisabled() {
+    // Create session metadata with LDAP credentials
+    SessionMetadata metadata = SessionMetadata.newBuilder()
+        .setUsername(TEST_USERNAME)
+        .setPassword(TEST_PASSWORD)
+        .build();
+
+    // Create session with LDAP disabled
+    registrationService = new RegistrationService(
+        senderSelectionStrategy,
+        sessionRepository,
+        sessionCreationRateLimiter,
+        sendSmsVerificationCodeRateLimiter,
+        sendVoiceVerificationCodeRateLimiter,
+        checkVerificationCodeRateLimiter,
+        List.of(sender),
+        clock,
+        ldapService,
+        false  // Disable LDAP
+    );
+
+    final RegistrationSession session = registrationService.createRegistrationSession(PHONE_NUMBER, metadata).join();
+
+    // Verify LDAP was not called
+    verify(ldapService, never()).authenticateAndGetPhoneNumber(any(), any());
+
+    // Verify session was created with provided phone number
+    assertEquals(PhoneNumberUtil.getInstance().format(PHONE_NUMBER, PhoneNumberUtil.PhoneNumberFormat.E164),
+        session.getPhoneNumber());
   }
 }

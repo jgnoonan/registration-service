@@ -1,0 +1,54 @@
+micronaut:
+  application:
+    name: registrationService-test
+  environments:
+    development:
+      environments: true
+  config:
+    registration:
+      useLdap: true
+      ldap:
+        url: ldap://localhost:389
+        baseDn: dc=valuelabs,dc=com
+        bindDn: cn=admin,dc=valuelabs,dc=com
+        bindPassword: Rat3onal
+        userFilter: (|(uid={0})(mail={0}))
+        phoneNumberAttribute: mobile
+        useSsl: false
+        minPoolSize: 3
+        maxPoolSize: 10
+        poolTimeout: 300000
+        testUser: raja@valuelabs.com
+        testUserPassword: Rat3onal
+
+# Test-specific configurations
+test:
+  mock:
+    enabled: true
+  useLdap: true
+  testUser: raja@valuelabs.com
+  testUserPassword: Rat3onal
+
+# Configure rate limiters for testing
+rateLimits:
+  leakyBucket:
+    sessionCreation:
+      name: sessionCreation
+      maxCapacity: 100
+      permitRegenerationPeriod: 1s
+      minDelay: 0s
+    sendSmsVerificationCode:
+      name: sendSmsVerificationCode
+      maxCapacity: 100
+      permitRegenerationPeriod: 1s
+      minDelay: 0s
+    sendVoiceVerificationCode:
+      name: sendVoiceVerificationCode
+      maxCapacity: 100
+      permitRegenerationPeriod: 1s
+      minDelay: 0s
+    checkVerificationCode:
+      name: checkVerificationCode
+      maxCapacity: 100
+      permitRegenerationPeriod: 1s
+      minDelay: 0s

@@ -77,8 +77,13 @@ public class LdapService {
             // Verify password by binding
             try {
                 LOG.debug("Attempting to bind with user credentials: {}", userDn);
-                connection.bind(userDn, password);
+                LDAPConnection userConnection = new LDAPConnection(connection.getSocketFactory(),
+                        connection.getConnectionOptions(),
+                        connection.getConnectedAddress(),
+                        connection.getConnectedPort());
+                userConnection.bind(userDn, password);
                 LOG.debug("Successfully authenticated user: {}", username);
+                userConnection.close();
             } catch (LDAPException e) {
                 LOG.info("Authentication failed for user {}: {}", username, e.getMessage());
                 return Optional.empty();
@@ -98,33 +103,45 @@ public class LdapService {
     }
 
     private String findUserDn(LDAPConnection connection, String username) throws LDAPException {
-        LOG.debug("Searching for user DN with filter: {}", 
-            String.format(ldapConfiguration.getUserFilter(), username));
+        if (username == null || username.isEmpty()) {
+            LOG.debug("Username is null or empty");
+            return null;
+        }
+        
+        String filter = String.format("(|(uid=%s)(mail=%s))", username, username);
+        LOG.debug("Searching for user DN with filter: {} in baseDn: {}", filter, ldapConfiguration.getBaseDn());
         
         SearchResultEntry entry = connection.searchForEntry(
             ldapConfiguration.getBaseDn(),
             SearchScope.SUB,
-            String.format(ldapConfiguration.getUserFilter(), username),
+            filter,
             "dn"
         );
         
         if (entry != null) {
-            LOG.debug("Found DN for user {}: {}", username, entry.getDN());
+            String dn = entry.getDN();
+            LOG.debug("Found DN for user {}: {}", username, dn);
+            return dn;
         } else {
             LOG.debug("No DN found for user: {}", username);
+            return null;
         }
-        return entry != null ? entry.getDN() : null;
     }
 
     private Optional<String> findPhoneNumber(LDAPConnection connection, String username) throws LDAPException {
-        LOG.debug("Searching for phone number with filter: {} and attribute: {}", 
-            String.format(ldapConfiguration.getUserFilter(), username),
-            ldapConfiguration.getPhoneNumberAttribute());
+        if (username == null || username.isEmpty()) {
+            LOG.debug("Username is null or empty");
+            return Optional.empty();
+        }
+        
+        String filter = String.format("(|(uid=%s)(mail=%s))", username, username);
+        LOG.debug("Searching for phone number with filter: {} and attribute: {} in baseDn: {}", 
+            filter, ldapConfiguration.getPhoneNumberAttribute(), ldapConfiguration.getBaseDn());
         
         SearchResultEntry entry = connection.searchForEntry(
             ldapConfiguration.getBaseDn(),
             SearchScope.SUB,
-            String.format(ldapConfiguration.getUserFilter(), username),
+            filter,
             ldapConfiguration.getPhoneNumberAttribute()
         );
         
@@ -134,14 +151,13 @@ public class LdapService {
         }
         
         String phoneNumber = entry.getAttributeValue(ldapConfiguration.getPhoneNumberAttribute());
-        if (phoneNumber != null) {
-            LOG.debug("Found phone number for user {}: {}", username, 
-                phoneNumber.replaceFirst("(\\d{3})(\\d{3})(\\d{4})", "***-***-$3"));
-        } else {
-            LOG.warn("Phone number attribute {} not found for user: {}", 
-                ldapConfiguration.getPhoneNumberAttribute(), username);
+        if (phoneNumber == null) {
+            LOG.debug("No phone number found for user: {}", username);
+            return Optional.empty();
         }
-        return Optional.ofNullable(phoneNumber);
+        
+        LOG.debug("Found phone number for user {}: {}", username, phoneNumber);
+        return Optional.of(phoneNumber);
     }
 
     private LDAPConnection createConnection() throws LDAPException {
