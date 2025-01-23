@@ -146,10 +146,12 @@ public class LdapConfiguration {
     }
 
     public String getPhoneNumberAttribute() {
+        LOG.debug("LDAP phone number attribute accessed: {}", phoneNumberAttribute);
         return phoneNumberAttribute;
     }
 
     public void setPhoneNumberAttribute(String phoneNumberAttribute) {
+        LOG.debug("Setting LDAP phone number attribute: {}", phoneNumberAttribute);
         this.phoneNumberAttribute = phoneNumberAttribute;
     }
 }

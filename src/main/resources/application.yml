@@ -38,11 +38,20 @@ micronaut:
   registration:
     useldap: true
     ldap:
+      # LDAP server connection settings
       url: ldap://localhost:389
       baseDn: dc=valuelabs,dc=com
       userFilter: (uid={0})
       bindDn: cn=admin,dc=valuelabs,dc=com
       bindPassword: Rat3onal
+      
+      # Phone number attribute configuration
+      # Common attribute names:
+      # - mobile: Common in Active Directory for mobile numbers
+      # - telephoneNumber: Standard LDAP attribute for primary phone
+      # - otherMobile: Additional mobile numbers in AD
+      # - homePhone: Home telephone number
+      phoneNumberAttribute: mobile
 grpc:
   server:
     endpoint: localhost

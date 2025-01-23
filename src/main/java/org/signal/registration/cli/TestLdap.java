@@ -57,6 +57,9 @@ public class TestLdap implements Runnable {
 
     @Override
     public void run() {
+        LOG.info("Starting LDAP test with configuration: url={}, baseDn={}, userFilter={}, useSsl={}", 
+            ldapUrl, ldapBaseDn, ldapUserFilter, useSsl);
+            
         try {
             LdapConfiguration config = new LdapConfiguration();
             config.setUrl(ldapUrl);
@@ -68,20 +71,27 @@ public class TestLdap implements Runnable {
             config.setConnectionTimeout(connectionTimeout);
             config.setReadTimeout(readTimeout);
 
+            LOG.debug("Initializing LDAP service...");
             LdapService ldapService = new LdapService(config);
             ldapService.initialize();
+            LOG.info("LDAP service initialized successfully");
 
-            System.out.println("Attempting LDAP authentication...");
+            System.out.println("\nAttempting LDAP authentication...");
+            LOG.info("Attempting to authenticate user: {}", ldapUserId);
+            
             Optional<String> phoneNumber = ldapService.authenticateAndGetPhoneNumber(
                 ldapUserId, ldapPassword);
 
             if (phoneNumber.isPresent()) {
+                LOG.info("Successfully authenticated user {} and retrieved phone number", ldapUserId);
                 System.out.println("✓ LDAP authentication successful");
                 System.out.println("✓ Phone number found: " + phoneNumber.get());
             } else {
+                LOG.warn("Authentication failed or no phone number found for user: {}", ldapUserId);
                 System.err.println("✗ LDAP authentication failed or no phone number found");
             }
         } catch (Exception e) {
+            LOG.error("LDAP test failed with error: {}", e.getMessage(), e);
             System.err.println("✗ LDAP operation failed: " + e.getMessage());
             LOG.error("Detailed error:", e);
         }

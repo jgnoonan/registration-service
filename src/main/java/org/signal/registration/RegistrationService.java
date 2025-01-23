@@ -110,13 +110,16 @@ public class RegistrationService {
   @PostConstruct
   public void initialize() {
     if (useLdap) {
-      LOG.info("Initializing LDAP service");
+      LOG.info("LDAP integration is enabled - initializing LDAP service");
       try {
         ldapService.initialize();
+        LOG.info("LDAP service successfully initialized");
       } catch (LDAPException e) {
-        LOG.error("Failed to initialize LDAP service", e);
+        LOG.error("Critical failure: Unable to initialize LDAP service: {}", e.getMessage(), e);
         throw new RuntimeException("Failed to initialize LDAP service", e);
       }
+    } else {
+      LOG.info("LDAP integration is disabled");
     }
   }
 
@@ -125,22 +128,28 @@ public class RegistrationService {
     final Phonenumber.PhoneNumber phoneNumberToUse;
 
     if (useLdap) {
-      LOG.debug("Authenticating user via LDAP: {}", sessionMetadata.getUsername());
+      String username = sessionMetadata.getUsername();
+      LOG.info("Creating registration session with LDAP authentication for user: {}", username);
+      
       Optional<String> ldapPhoneNumber = ldapService.authenticateAndGetPhoneNumber(
-          sessionMetadata.getUsername(), sessionMetadata.getPassword());
+          username, sessionMetadata.getPassword());
+          
       if (ldapPhoneNumber.isEmpty()) {
-        LOG.warn("LDAP authentication failed for user: {}", sessionMetadata.getUsername());
-        throw new AuthenticationException("Invalid LDAP credentials");
+        LOG.warn("LDAP authentication failed or no phone number found for user: {}", username);
+        throw new AuthenticationException("Invalid LDAP credentials or no phone number associated with account");
       }
 
       try {
         phoneNumberToUse = PhoneNumberUtil.getInstance().parse("+" + ldapPhoneNumber.get(), null);
-        LOG.debug("Successfully retrieved phone number from LDAP for user: {}", sessionMetadata.getUsername());
+        LOG.info("Successfully retrieved and parsed phone number from LDAP for user: {} -> {}", 
+            username, phoneNumberToUse.getNationalNumber());
       } catch (NumberParseException e) {
-        LOG.error("Failed to parse phone number from LDAP for user: {}", sessionMetadata.getUsername(), e);
-        throw new IllegalArgumentException("Failed to parse phone number from LDAP", e);
+        LOG.error("Failed to parse phone number '{}' from LDAP for user: {}", 
+            ldapPhoneNumber.get(), username, e);
+        throw new IllegalArgumentException("Invalid phone number format in LDAP", e);
       }
     } else {
+      LOG.debug("LDAP disabled, using provided phone number: {}", phoneNumber.getNationalNumber());
       phoneNumberToUse = phoneNumber;
     }
 
