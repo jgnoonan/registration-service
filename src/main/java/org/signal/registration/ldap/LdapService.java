@@ -1,28 +1,28 @@
-package org.signal.registration.ldap;
-
-import com.unboundid.ldap.sdk.*;
-import com.unboundid.util.ssl.JVMDefaultTrustManager;
-import com.unboundid.util.ssl.SSLUtil;
-import jakarta.inject.Singleton;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import javax.net.ssl.SSLSocketFactory;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.security.GeneralSecurityException;
-import java.util.Optional;
-
+/**
+ * Service class for handling LDAP authentication and user management.
+ * This class provides functionality for authenticating users against an LDAP server,
+ * managing LDAP connections with SSL/TLS support, and retrieving user information.
+ */
 @Singleton
 public class LdapService {
     private static final Logger LOG = LoggerFactory.getLogger(LdapService.class);
     private final LdapConfiguration ldapConfiguration;
     private LDAPConnectionPool connectionPool;
 
+    /**
+     * Constructs a new LdapService with the specified configuration.
+     *
+     * @param ldapConfiguration the LDAP configuration to use
+     */
     public LdapService(LdapConfiguration ldapConfiguration) {
         this.ldapConfiguration = ldapConfiguration;
     }
 
+    /**
+     * Initializes the LDAP service with the specified configuration.
+     *
+     * @throws LDAPException if an error occurs during initialization
+     */
     public void initialize() throws LDAPException {
         LOG.info("Initializing LDAP service with configuration: url={}, baseDn={}, useSSL={}", 
             ldapConfiguration.getUrl(), ldapConfiguration.getBaseDn(), ldapConfiguration.isUseSsl());
@@ -48,6 +48,13 @@ public class LdapService {
         }
     }
 
+    /**
+     * Authenticates a user against the LDAP server and retrieves their phone number.
+     *
+     * @param username the username to authenticate
+     * @param password the password to authenticate with
+     * @return the user's phone number if authentication is successful, empty otherwise
+     */
     public Optional<String> authenticateAndGetPhoneNumber(String username, String password) {
         int retryCount = 0;
         while (true) {
@@ -63,6 +70,14 @@ public class LdapService {
         }
     }
 
+    /**
+     * Attempts to authenticate a user against the LDAP server and retrieve their phone number.
+     *
+     * @param username the username to authenticate
+     * @param password the password to authenticate with
+     * @return the user's phone number if authentication is successful, empty otherwise
+     * @throws LDAPException if an error occurs during authentication
+     */
     private Optional<String> tryAuthenticateAndGetPhoneNumber(String username, String password) throws LDAPException {
         LOG.debug("Attempting to authenticate and retrieve phone number for user: {}", username);
         LDAPConnection connection = connectionPool.getConnection();
@@ -102,6 +117,14 @@ public class LdapService {
         }
     }
 
+    /**
+     * Finds the DN (Distinguished Name) for a given username.
+     *
+     * @param connection the LDAP connection to use
+     * @param username the username to find the DN for
+     * @return the user's DN if found, null otherwise
+     * @throws LDAPException if an error occurs while searching for the user
+     */
     private String findUserDn(LDAPConnection connection, String username) throws LDAPException {
         if (username == null || username.isEmpty()) {
             LOG.debug("Username is null or empty");
@@ -128,6 +151,14 @@ public class LdapService {
         }
     }
 
+    /**
+     * Finds the phone number for a given username.
+     *
+     * @param connection the LDAP connection to use
+     * @param username the username to find the phone number for
+     * @return the user's phone number if found, empty otherwise
+     * @throws LDAPException if an error occurs while searching for the user
+     */
     private Optional<String> findPhoneNumber(LDAPConnection connection, String username) throws LDAPException {
         if (username == null || username.isEmpty()) {
             LOG.debug("Username is null or empty");
@@ -160,6 +191,13 @@ public class LdapService {
         return Optional.of(phoneNumber);
     }
 
+    /**
+     * Creates a new LDAP connection with the configured settings.
+     * This method handles SSL/TLS configuration and connection options.
+     *
+     * @return a new LDAP connection
+     * @throws LDAPException if an error occurs while creating the connection
+     */
     private LDAPConnection createConnection() throws LDAPException {
         String url = ldapConfiguration.getUrl();
         if (url == null || url.isEmpty()) {
@@ -188,25 +226,55 @@ public class LdapService {
         LDAPConnectionOptions options = new LDAPConnectionOptions();
         options.setConnectTimeoutMillis(ldapConfiguration.getConnectionTimeout());
         options.setResponseTimeoutMillis(ldapConfiguration.getReadTimeout());
+        options.setFollowReferrals(false);
 
-        LDAPConnection connection;
+        SSLSocketFactory sslSocketFactory = null;
         if (ldapConfiguration.isUseSsl()) {
             try {
-                // Use JVM default trust store
-                SSLUtil sslUtil = new SSLUtil(JVMDefaultTrustManager.getInstance());
-                SSLSocketFactory sslSocketFactory = sslUtil.createSSLSocketFactory();
-                connection = new LDAPConnection(sslSocketFactory, options, host, port);
-            } catch (GeneralSecurityException e) {
+                SSLUtil sslUtil;
+                if (ldapConfiguration.getTrustStore() != null && !ldapConfiguration.getTrustStore().isEmpty()) {
+                    LOG.info("Using custom truststore: {}", ldapConfiguration.getTrustStore());
+                    KeyStore trustStore = KeyStore.getInstance(ldapConfiguration.getTrustStoreType());
+                    try (FileInputStream fis = new FileInputStream(ldapConfiguration.getTrustStore())) {
+                        trustStore.load(fis, ldapConfiguration.getTrustStorePassword().toCharArray());
+                    }
+                    TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                    tmf.init(trustStore);
+                    sslUtil = new SSLUtil(tmf.getTrustManagers());
+                } else {
+                    LOG.info("Using JVM default trust store");
+                    sslUtil = new SSLUtil(JVMDefaultTrustManager.getInstance());
+                }
+
+                if (!ldapConfiguration.isHostnameVerification()) {
+                    LOG.warn("Hostname verification is disabled. This is not recommended for production use.");
+                    sslUtil = new SSLUtil(new TrustAllTrustManager());
+                }
+
+                sslSocketFactory = sslUtil.createSSLSocketFactory();
+            } catch (GeneralSecurityException | IOException e) {
                 throw new LDAPException(ResultCode.CONNECT_ERROR, 
-                    "Failed to create SSL connection", e);
+                    "Failed to create SSL connection: " + e.getMessage(), e);
             }
-        } else {
-            connection = new LDAPConnection(options, host, port);
         }
 
-        return connection;
+        try {
+            if (sslSocketFactory != null) {
+                return new LDAPConnection(sslSocketFactory, options, host, port);
+            } else {
+                return new LDAPConnection(options, host, port);
+            }
+        } catch (LDAPException e) {
+            LOG.error("Failed to connect to LDAP server: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
+    /**
+     * Implements an exponential backoff strategy for retrying failed operations.
+     *
+     * @param retryCount the current retry attempt number
+     */
     private void backoff(int retryCount) {
         try {
             Thread.sleep((long) Math.pow(2, retryCount) * 100);
@@ -215,12 +283,21 @@ public class LdapService {
         }
     }
 
+    /**
+     * Checks if an LDAP exception is retryable.
+     *
+     * @param e the LDAP exception to check
+     * @return true if the exception is retryable, false otherwise
+     */
     private boolean isRetryableError(LDAPException e) {
         return e.getResultCode() == ResultCode.CONNECT_ERROR ||
                e.getResultCode() == ResultCode.SERVER_DOWN ||
                e.getResultCode() == ResultCode.TIMEOUT;
     }
 
+    /**
+     * Closes the LDAP connection pool.
+     */
     public void cleanup() {
         if (connectionPool != null) {
             connectionPool.close();

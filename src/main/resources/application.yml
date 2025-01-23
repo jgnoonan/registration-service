@@ -43,12 +43,19 @@ micronaut:
       useLdap: true
       ldap:
         # LDAP server connection settings
-        url: ldap://localhost:389
+        url: ldaps://signalserver.valuelabs.com:636
         baseDn: dc=valuelabs,dc=com
-        useSsl: false
+        useSsl: true
+        trustStore: ${user.dir}/src/main/resources/certs/truststore.jks
+        trustStorePassword: changeit
+        trustStoreType: JKS
+        hostnameVerification: true
+        connectionTimeout: 5000
+        readTimeout: 30000
         minPoolSize: 3
         maxPoolSize: 10
-        timeout: 300000
+        poolTimeout: 300000
+        maxRetries: 3
         userFilter: (uid={0})
         bindDn: cn=admin,dc=valuelabs,dc=com
         bindPassword: Rat3onal
