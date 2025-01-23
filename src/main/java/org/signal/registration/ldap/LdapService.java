@@ -3,12 +3,13 @@ package org.signal.registration.ldap;
 import com.unboundid.ldap.sdk.*;
 import com.unboundid.util.ssl.JVMDefaultTrustManager;
 import com.unboundid.util.ssl.SSLUtil;
-import com.unboundid.util.ssl.TrustStoreTrustManager;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.SSLSocketFactory;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
 import java.util.Optional;
 
@@ -36,9 +37,29 @@ public class LdapService {
     }
 
     private LDAPConnection createConnection() throws LDAPException {
-        String[] hostParts = ldapConfiguration.getUrl().split("://")[1].split(":");
-        String host = hostParts[0];
-        int port = hostParts.length > 1 ? Integer.parseInt(hostParts[1]) : ldapConfiguration.getPort();
+        String url = ldapConfiguration.getUrl();
+        if (url == null || url.isEmpty()) {
+            throw new LDAPException(ResultCode.PARAM_ERROR, "LDAP URL cannot be null or empty");
+        }
+
+        String host;
+        int port;
+        try {
+            URI uri = new URI(url);
+            host = uri.getHost();
+            port = uri.getPort();
+            if (host == null) {
+                throw new LDAPException(ResultCode.PARAM_ERROR, "Invalid LDAP URL: missing host");
+            }
+            if (port == -1) {
+                port = ldapConfiguration.getPort();
+            }
+            if (port <= 0 || port > 65535) {
+                throw new LDAPException(ResultCode.PARAM_ERROR, "Invalid port number: " + port);
+            }
+        } catch (URISyntaxException e) {
+            throw new LDAPException(ResultCode.PARAM_ERROR, "Invalid LDAP URL: " + e.getMessage());
+        }
 
         LDAPConnectionOptions options = new LDAPConnectionOptions();
         options.setConnectTimeoutMillis(ldapConfiguration.getConnectionTimeout());
@@ -47,19 +68,8 @@ public class LdapService {
         LDAPConnection connection;
         if (ldapConfiguration.isUseSsl()) {
             try {
-                // Use configured trust store instead of trusting all
-                SSLUtil sslUtil;
-                if (ldapConfiguration.getTrustStorePath() != null) {
-                    sslUtil = new SSLUtil(new TrustStoreTrustManager(
-                        ldapConfiguration.getTrustStorePath(),
-                        ldapConfiguration.getTrustStorePassword().toCharArray(),
-                        "JKS",
-                        true
-                    ));
-                } else {
-                    // Fallback to default system trust store
-                    sslUtil = new SSLUtil(new JVMDefaultTrustManager());
-                }
+                // Use JVM default trust store
+                SSLUtil sslUtil = new SSLUtil(JVMDefaultTrustManager.getInstance());
                 SSLSocketFactory sslSocketFactory = sslUtil.createSSLSocketFactory();
                 connection = new LDAPConnection(sslSocketFactory, options, host, port);
             } catch (GeneralSecurityException e) {

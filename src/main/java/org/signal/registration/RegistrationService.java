@@ -11,6 +11,7 @@ import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.protobuf.ByteString;
+import com.unboundid.ldap.sdk.LDAPException;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
@@ -110,7 +111,12 @@ public class RegistrationService {
   public void initialize() {
     if (useLdap) {
       LOG.info("Initializing LDAP service");
-      ldapService.initialize();
+      try {
+        ldapService.initialize();
+      } catch (LDAPException e) {
+        LOG.error("Failed to initialize LDAP service", e);
+        throw new RuntimeException("Failed to initialize LDAP service", e);
+      }
     }
   }
 

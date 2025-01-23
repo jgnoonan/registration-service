@@ -42,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.signal.registration.ratelimit.RateLimitExceededException;
 import org.signal.registration.ratelimit.RateLimiter;
 import org.signal.registration.rpc.RegistrationSessionMetadata;
@@ -64,6 +65,7 @@ import org.signal.registration.session.SessionRepository;
 import org.signal.registration.util.CompletionExceptions;
 import org.signal.registration.util.UUIDUtil;
 import org.signal.registration.ldap.LdapService;
+import org.signal.registration.session.SessionCompletedEvent;
 
 class RegistrationServiceTest {
 
@@ -89,7 +91,8 @@ class RegistrationServiceTest {
   private static final SessionMetadata SESSION_METADATA = SessionMetadata.newBuilder().build();
   private static final Instant CURRENT_TIME = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
-  @BeforeEach
+  @SuppressWarnings("unchecked")
+@BeforeEach
   void setUp() {
     sender = mock(VerificationCodeSender.class);
     when(sender.getName()).thenReturn(SENDER_NAME);
@@ -99,31 +102,28 @@ class RegistrationServiceTest {
     when(clock.instant()).thenReturn(CURRENT_TIME);
     when(clock.millis()).thenReturn(CURRENT_TIME.toEpochMilli());
 
-    //noinspection unchecked
-    sessionRepository = spy(new MemorySessionRepository(mock(ApplicationEventPublisher.class), clock));
+    @SuppressWarnings("unchecked")
+    ApplicationEventPublisher<SessionCompletedEvent> publisher = mock(ApplicationEventPublisher.class);
+    sessionRepository = spy(new MemorySessionRepository(publisher, clock));
 
     senderSelectionStrategy = mock(SenderSelectionStrategy.class);
     when(senderSelectionStrategy.chooseVerificationCodeSender(any(), any(), any(), any(), any(), any()))
         .thenReturn(new SenderSelectionStrategy.SenderSelection(sender, SenderSelectionStrategy.SelectionReason.CONFIGURED));
 
-    //noinspection unchecked
-    sessionCreationRateLimiter = mock(RateLimiter.class);
+    sessionCreationRateLimiter = mock(RateLimiter.class, Mockito.withSettings().useConstructor().defaultAnswer(Mockito.RETURNS_DEFAULTS));
     when(sessionCreationRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
 
-    //noinspection unchecked
-    sendSmsVerificationCodeRateLimiter = mock(RateLimiter.class);
+    sendSmsVerificationCodeRateLimiter = mock(RateLimiter.class, Mockito.withSettings().useConstructor().defaultAnswer(Mockito.RETURNS_DEFAULTS));
     when(sendSmsVerificationCodeRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
     when(sendSmsVerificationCodeRateLimiter.getTimeOfNextAction(any()))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(CURRENT_TIME)));
 
-    //noinspection unchecked
-    sendVoiceVerificationCodeRateLimiter = mock(RateLimiter.class);
+    sendVoiceVerificationCodeRateLimiter = mock(RateLimiter.class, Mockito.withSettings().useConstructor().defaultAnswer(Mockito.RETURNS_DEFAULTS));
     when(sendVoiceVerificationCodeRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
     when(sendVoiceVerificationCodeRateLimiter.getTimeOfNextAction(any()))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(CURRENT_TIME)));
 
-    //noinspection unchecked
-    checkVerificationCodeRateLimiter = mock(RateLimiter.class);
+    checkVerificationCodeRateLimiter = mock(RateLimiter.class, Mockito.withSettings().useConstructor().defaultAnswer(Mockito.RETURNS_DEFAULTS));
     when(checkVerificationCodeRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
     when(checkVerificationCodeRateLimiter.getTimeOfNextAction(any()))
         .thenReturn(CompletableFuture.completedFuture(Optional.of(CURRENT_TIME)));
@@ -139,12 +139,7 @@ class RegistrationServiceTest {
         List.of(sender),
         clock,
         ldapService,
-        true,  // useLdap
-        "ldap://test.example.com",  // ldapUrl
-        "dc=test,dc=example,dc=com",   // ldapBaseDn
-        "(objectClass=person)", // ldapUserFilter
-        "cn=admin,dc=test,dc=example,dc=com", // ldapBindDn
-        "test-password"  // ldapBindPassword
+        true  // useLdap
     );
   }
 
