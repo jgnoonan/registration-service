@@ -1,3 +1,11 @@
+package org.signal.registration.ldap;
+
+import io.micronaut.context.annotation.ConfigurationProperties;
+import io.micronaut.context.annotation.Value;
+import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Configuration class for LDAP authentication settings.
  * This class manages all LDAP-related configuration properties including connection,

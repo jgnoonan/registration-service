@@ -4,22 +4,60 @@ micronaut:
     name: registrationService
   environments:
     development:
+      micronaut:
+        metrics:
+          export:
+            datadog:
+              enabled: false
       environments: true
+      config:
+        registration:
+          useLdap: true
+          ldap:
+            # LDAP server connection settings
+            url: ldap://localhost:389
+            baseDn: dc=valuelabs,dc=com
+            useSsl: false
+            trustStore: /Users/jgnoonan/registration-service/src/main/resources/certs/truststore.jks
+            trustStorePassword: changeit
+            trustStoreType: JKS
+            hostnameVerification: true
+            connectionTimeout: 30000
+            readTimeout: 30000
+            minPoolSize: 3
+            maxPoolSize: 10
+            poolTimeout: 300000
+            maxRetries: 3
+            userFilter: (uid={0})
+            bindDn: cn=admin,dc=valuelabs,dc=com
+            bindPassword: Rat3onal
+            phoneNumberAttribute: mobile
+            testPhoneNumber: +12025550123
+    production:
+      config:
+        registration:
+          useLdap: true
   server:
     host: 0.0.0.0
     port: 8080
     httpVersion: 1.1
+    cors:
+      enabled: true
+      configurations:
+        web:
+          allowedOrigins:
+            - http://localhost:8080  # For testing
+          allowedMethods:
+            - POST
+            - OPTIONS
+          allowedHeaders:
+            - Content-Type
+            - Authorization
   metrics:
-    binders:
-      netty:
-        queues:
-          enabled: false
+    enabled: false
     export:
       datadog:
         enabled: false
-        step: 20s
-    tags:
-      service: registration
   executors:
     scheduled:
       type: scheduled
@@ -40,17 +78,16 @@ micronaut:
       delays: 60s
   config:
     registration:
-      useLdap: true
       ldap:
         # LDAP server connection settings
-        url: ldaps://signalserver.valuelabs.com:636
+        url: ldap://localhost:389
         baseDn: dc=valuelabs,dc=com
-        useSsl: true
-        trustStore: ${user.dir}/src/main/resources/certs/truststore.jks
+        useSsl: false
+        trustStore: /Users/jgnoonan/registration-service/src/main/resources/certs/truststore.jks
         trustStorePassword: changeit
         trustStoreType: JKS
         hostnameVerification: true
-        connectionTimeout: 5000
+        connectionTimeout: 30000
         readTimeout: 30000
         minPoolSize: 3
         maxPoolSize: 10
@@ -62,12 +99,24 @@ micronaut:
         phoneNumberAttribute: mobile
         testPhoneNumber: +12025550123
 
+messagebird:
+  enabled: false
+
+bigtable:
+  enabled: false
+
+gcp:
+  enabled: false
+
+twilio:
+  enabled: false
+
+infobip:
+  enabled: false
+
 selection:
   sms:
-    transport: SMS
-    fallbackSenders: ["last-digits-of-phone-number"]
-    defaultWeights:
-      last-digits-of-phone-number: 100
+    transport: NONE
   voice:
     transport: VOICE
     fallbackSenders: ["last-digits-of-phone-number"]
