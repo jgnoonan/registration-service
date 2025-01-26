@@ -149,7 +149,7 @@ public class TwilioVerifySender implements VerificationCodeSender {
                 this.getName(),
                 endpointName,
                 throwable == null,
-                ApiExceptions.extractErrorCode(throwable),
+                throwable != null ? ApiExceptions.extractErrorCode(throwable) : null,
                 sample)
         )
         .handle((verification, throwable) -> {

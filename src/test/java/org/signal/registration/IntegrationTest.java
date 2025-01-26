@@ -25,6 +25,8 @@ import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -51,28 +53,58 @@ import org.signal.registration.sender.SenderSelectionStrategy;
 import org.signal.registration.sender.VerificationCodeSender;
 import org.signal.registration.util.UUIDUtil;
 
-@MicronautTest
+@MicronautTest(environments = "test", startApplication = false)
 public class IntegrationTest {
-
-  @MockBean
-  SenderSelectionStrategy senderSelectionStrategy = mock(SenderSelectionStrategy.class);
-
-  @SuppressWarnings("unchecked")
-  @MockBean(named = "session-creation")
-  @Named("session-creation")
-  RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter = mock(RateLimiter.class);
 
   @Inject
   private RegistrationServiceGrpc.RegistrationServiceBlockingStub blockingStub;
 
+  @Inject
+  private Clock clock;
+
+  @Inject
+  private VerificationCodeSender sender;
+
+  @Inject
+  private SenderSelectionStrategy senderSelectionStrategy;
+
+  @Inject
+  private RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter;
+
+  @MockBean(Clock.class)
+  Clock clock() {
+    return mock(Clock.class);
+  }
+
+  @MockBean(VerificationCodeSender.class)
+  VerificationCodeSender mockVerificationCodeSender() {
+    return mock(VerificationCodeSender.class);
+  }
+
+  @MockBean(SenderSelectionStrategy.class)
+  SenderSelectionStrategy mockSenderSelectionStrategy() {
+    return mock(SenderSelectionStrategy.class);
+  }
+
+  @Named("session-creation")
+  @MockBean(RateLimiter.class)
+  RateLimiter<Phonenumber.PhoneNumber> mockSessionCreationRateLimiter() {
+    return mock(RateLimiter.class);
+  }
+
+  private static final Instant CURRENT_TIME = Instant.now();
+  private static final String SENDER_NAME = "sender-name";
+
   @BeforeEach
   void setUp() {
-    when(sessionCreationRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
-
+    when(clock.instant()).thenReturn(CURRENT_TIME);
+    when(sender.getName()).thenReturn(SENDER_NAME);
     when(senderSelectionStrategy.chooseVerificationCodeSender(any(), any(), any(), any(), any(), any()))
         .thenReturn(new SenderSelectionStrategy.SenderSelection(
             new LastDigitsOfPhoneNumberVerificationCodeSender(),
             SenderSelectionStrategy.SelectionReason.CONFIGURED));
+
+    when(sessionCreationRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
   }
 
   @Test

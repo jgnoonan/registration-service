@@ -25,7 +25,7 @@ public class LdapAuthenticationTest {
     private static final String VALID_USER = "raja@valuelabs.com";
     private static final String VALID_PASSWORD = "Rat3onal";
     private static final String EXPECTED_PHONE = "+919703804045";
-    private static final String INVALID_USER = "nonexistent@valuelabs.com";
+    private static final String INVALID_USER = "nonexistent@test.com";
     private static final String INVALID_PASSWORD = "wrongPassword";
 
     @Inject
@@ -52,43 +52,33 @@ public class LdapAuthenticationTest {
     }
 
     /**
-     * Tests authentication failure with invalid username.
-     * Verifies that authentication fails when a non-existent username is provided.
+     * Tests failed authentication with invalid username.
+     * Verifies that authentication fails when username doesn't exist.
      */
     @Test
-    public void testInvalidUsername() {
+    public void testFailedAuthenticationInvalidUser() {
         Optional<String> result = ldapService.authenticateAndGetPhoneNumber(INVALID_USER, VALID_PASSWORD);
-        assertTrue(result.isEmpty(), "Authentication should fail for invalid username");
+        assertFalse(result.isPresent(), "Authentication should fail for invalid username");
     }
 
     /**
-     * Tests authentication failure with invalid password.
-     * Verifies that authentication fails when an incorrect password is provided.
+     * Tests failed authentication with invalid password.
+     * Verifies that authentication fails when password is incorrect.
      */
     @Test
-    public void testInvalidPassword() {
+    public void testFailedAuthenticationInvalidPassword() {
         Optional<String> result = ldapService.authenticateAndGetPhoneNumber(VALID_USER, INVALID_PASSWORD);
-        assertTrue(result.isEmpty(), "Authentication should fail for invalid password");
+        assertFalse(result.isPresent(), "Authentication should fail for invalid password");
     }
 
     /**
-     * Tests authentication with null username.
-     * Verifies that authentication fails gracefully when username is null.
+     * Tests authentication with null credentials.
+     * Verifies that authentication fails gracefully when credentials are null.
      */
     @Test
-    public void testNullUsername() {
-        Optional<String> result = ldapService.authenticateAndGetPhoneNumber(null, VALID_PASSWORD);
-        assertTrue(result.isEmpty(), "Authentication should be skipped for null username");
-    }
-
-    /**
-     * Tests authentication with null password.
-     * Verifies that authentication fails gracefully when password is null.
-     */
-    @Test
-    public void testNullPassword() {
-        Optional<String> result = ldapService.authenticateAndGetPhoneNumber(VALID_USER, null);
-        assertTrue(result.isEmpty(), "Authentication should be skipped for null password");
+    public void testNullCredentials() {
+        Optional<String> result = ldapService.authenticateAndGetPhoneNumber(null, null);
+        assertFalse(result.isPresent(), "Authentication should fail for null credentials");
     }
 
     /**

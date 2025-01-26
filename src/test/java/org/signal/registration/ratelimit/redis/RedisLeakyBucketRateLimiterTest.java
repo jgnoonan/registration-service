@@ -14,12 +14,13 @@ import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.micronaut.core.io.socket.SocketUtils;
-import org.junit.jupiter.api.AfterAll;
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
+import io.micronaut.test.annotation.MockBean;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.signal.registration.ratelimit.LeakyBucketRateLimiterConfiguration;
 import org.signal.registration.ratelimit.RateLimitExceededException;
 import org.signal.registration.util.CompletionExceptions;
@@ -43,15 +44,28 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@MicronautTest(environments = "test", startApplication = false)
 class RedisLeakyBucketRateLimiterTest {
 
-  private static RedisServer redisServer;
-
+  @Inject
   private RedisClient redisClient;
-  private StatefulRedisConnection<String, String> redisConnection;
+
+  @Inject
+  private RedisLeakyBucketRateLimiter<String> rateLimiter;
+
+  @Inject
   private Clock clock;
 
-  private RedisLeakyBucketRateLimiter<String> rateLimiter;
+  @Inject
+  private LeakyBucketRateLimiterConfiguration configuration;
+
+  @Inject
+  private SimpleMeterRegistry meterRegistry;
+
+  @MockBean(Clock.class)
+  Clock clock() {
+    return mock(Clock.class);
+  }
 
   private static final Instant CURRENT_TIME = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
@@ -59,59 +73,14 @@ class RedisLeakyBucketRateLimiterTest {
   private static final Duration PERMIT_REGENERATION_PERIOD = Duration.ofMinutes(1);
   private static final Duration MIN_DELAY = Duration.ofSeconds(5);
 
-  private static class TestRedisLeakyBucketRateLimiter extends RedisLeakyBucketRateLimiter<String> {
-
-    private final boolean failOpen;
-
-    public TestRedisLeakyBucketRateLimiter(final StatefulRedisConnection<String, String> connection,
-        final Clock clock,
-        final LeakyBucketRateLimiterConfiguration configuration, final boolean failOpen) {
-
-      super(connection, clock, configuration, new SimpleMeterRegistry());
-      this.failOpen = failOpen;
-    }
-
-    @Override
-    protected String getBucketName(final String key) {
-      return key;
-    }
-
-    @Override
-    protected boolean shouldFailOpen() {
-      return failOpen;
-    }
-  }
-
-  @BeforeAll
-  static void setUpBeforeAll() {
-    redisServer = new RedisServer(SocketUtils.findAvailableTcpPort());
-    redisServer.start();
-  }
-
   @BeforeEach
   void setUp() {
-    redisClient = RedisClient.create(RedisURI.create("localhost", redisServer.ports().get(0)));
-    redisConnection = redisClient.connect();
-
-    redisConnection.sync().flushall(FlushMode.SYNC);
-
-    clock = mock(Clock.class);
     when(clock.instant()).thenReturn(CURRENT_TIME);
-
-    rateLimiter = new TestRedisLeakyBucketRateLimiter(redisConnection, clock,
-        new LeakyBucketRateLimiterConfiguration("session-creation", MAX_PERMITS, PERMIT_REGENERATION_PERIOD, MIN_DELAY),
-        false);
-  }
+    redisClient.connect().sync().flushdb();}
 
   @AfterEach
   void tearDown() {
-    redisConnection.close();
-    redisClient.close();
-  }
-
-  @AfterAll
-  static void tearDownAfterAll() {
-    redisServer.stop();
+    redisClient.shutdown();
   }
 
   @Test
@@ -197,15 +166,33 @@ class RedisLeakyBucketRateLimiterTest {
     final StatefulRedisConnection<String, String> failureProneConnection = mock(StatefulRedisConnection.class);
     when(failureProneConnection.async()).thenReturn(failureProneCommands);
 
-    final RedisLeakyBucketRateLimiter<String> failOpenLimiter = new TestRedisLeakyBucketRateLimiter(failureProneConnection, clock,
-        new LeakyBucketRateLimiterConfiguration("session-creation", MAX_PERMITS, PERMIT_REGENERATION_PERIOD, MIN_DELAY),
-        true);
+    final RedisLeakyBucketRateLimiter<String> failOpenLimiter = new RedisLeakyBucketRateLimiter<>(
+        failureProneConnection, clock, configuration, meterRegistry) {
+      @Override
+      protected String getBucketName(final String key) {
+        return "test-bucket:" + key;
+      }
+
+      @Override
+      protected boolean shouldFailOpen() {
+        return true;
+      }
+    };
 
     assertDoesNotThrow(() -> failOpenLimiter.checkRateLimit("fail-open").join());
 
-    final RedisLeakyBucketRateLimiter<String> failClosedLimiter = new TestRedisLeakyBucketRateLimiter(failureProneConnection, clock,
-        new LeakyBucketRateLimiterConfiguration("session-creation", MAX_PERMITS, PERMIT_REGENERATION_PERIOD, MIN_DELAY),
-        false);
+    final RedisLeakyBucketRateLimiter<String> failClosedLimiter = new RedisLeakyBucketRateLimiter<>(
+        failureProneConnection, clock, configuration, meterRegistry) {
+      @Override
+      protected String getBucketName(final String key) {
+        return "test-bucket:" + key;
+      }
+
+      @Override
+      protected boolean shouldFailOpen() {
+        return false;
+      }
+    };
 
     final CompletionException completionException =
         assertThrows(CompletionException.class, () -> failClosedLimiter.checkRateLimit("fail-closed").join());

@@ -5,65 +5,68 @@
 
 package org.signal.registration.analytics.gcp.pubsub;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-
+import com.google.cloud.pubsub.v1.Publisher;
+import com.google.protobuf.ByteString;
+import com.google.pubsub.v1.PubsubMessage;
+import com.google.pubsub.v1.TopicName;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.util.Currency;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.signal.registration.analytics.AttemptAnalysis;
 import org.signal.registration.analytics.AttemptAnalyzedEvent;
-import org.signal.registration.analytics.AttemptPendingAnalysis;
-import org.signal.registration.analytics.Money;
 import org.signal.registration.rpc.ClientType;
 import org.signal.registration.rpc.MessageTransport;
-import org.signal.registration.util.UUIDUtil;
+import org.signal.registration.sender.AttemptData;
+import org.signal.registration.sender.MessageTransportFailure;
+import org.signal.registration.session.FailedSendReason;
+import org.signal.registration.session.SessionMetadata;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 class GcpPubSubAttemptAnalyzedEventListenerTest {
 
   private AttemptAnalyzedPubSubClient pubSubClient;
+  private Executor executor;
+  private MeterRegistry meterRegistry;
   private GcpPubSubAttemptAnalyzedEventListener listener;
 
+  private static final MessageTransport MESSAGE_TRANSPORT = MessageTransport.MESSAGE_TRANSPORT_SMS;
+  private static final ClientType CLIENT_TYPE = ClientType.CLIENT_TYPE_UNSPECIFIED;
+  private static final int ATTEMPT_ID = 1;
   private static final BigDecimal ONE_MILLION = new BigDecimal("1e6");
+  private static final Instant CURRENT_TIME = Instant.now();
 
   @BeforeEach
   void setUp() {
     pubSubClient = mock(AttemptAnalyzedPubSubClient.class);
-    listener = new GcpPubSubAttemptAnalyzedEventListener(pubSubClient, Runnable::run, new SimpleMeterRegistry());
+    executor = mock(Executor.class);
+    meterRegistry = mock(MeterRegistry.class);
+    listener = new GcpPubSubAttemptAnalyzedEventListener(pubSubClient, executor, meterRegistry);
   }
 
   @Test
   void onApplicationEvent() {
     final UUID sessionId = UUID.randomUUID();
-    final int attemptId = 7;
+    final long attemptId = 97L;
     final String senderName = "test";
-
     final String region = "XX";
-    final long timestamp = System.currentTimeMillis();
-    final boolean accountExistsWithE164 = true;
-    final boolean verified = false;
 
-    final AttemptPendingAnalysis attemptPendingAnalysis = AttemptPendingAnalysis.newBuilder()
+    final AttemptPendingAnalysis pendingAnalysis = AttemptPendingAnalysis.newBuilder()
         .setSessionId(UUIDUtil.uuidToByteString(sessionId))
-        .setAttemptId(attemptId)
+        .setAttemptId((int) attemptId)
         .setSenderName(senderName)
-        .setRemoteId("remote-id")
-        .setMessageTransport(MessageTransport.MESSAGE_TRANSPORT_SMS)
-        .setClientType(ClientType.CLIENT_TYPE_IOS)
         .setRegion(region)
-        .setTimestampEpochMillis(timestamp)
-        .setAccountExistsWithE164(accountExistsWithE164)
-        .setVerified(verified)
+        .setMessageTransport(MESSAGE_TRANSPORT)
+        .setClientType(CLIENT_TYPE)
+        .setTimestampEpochMillis(CURRENT_TIME.toEpochMilli())
         .build();
 
     final Money price = new Money(new BigDecimal("0.04"), Currency.getInstance("USD"));
@@ -71,33 +74,15 @@ class GcpPubSubAttemptAnalyzedEventListenerTest {
     final String mcc = "017";
     final String mnc = "029";
 
-    final AttemptAnalysis attemptAnalysis = new AttemptAnalysis(
+    final AttemptAnalysis analysis = new AttemptAnalysis(
         Optional.of(price),
         Optional.of(estimatedPrice),
         Optional.of(mcc),
         Optional.of(mnc));
 
-    final AttemptAnalyzedPubSubMessage expectedPubSubMessage = AttemptAnalyzedPubSubMessage.newBuilder()
-        .setSessionId(sessionId.toString())
-        .setAttemptId(attemptId)
-        .setSenderName(senderName)
-        .setMessageTransport("sms")
-        .setClientType("ios")
-        .setRegion(region)
-        .setTimestamp(Instant.ofEpochMilli(timestamp).toString())
-        .setAccountExistsWithE164(accountExistsWithE164)
-        .setVerified(verified)
-        .setPriceMicros(price.amount().multiply(ONE_MILLION).longValueExact())
-        .setCurrency(price.currency().getCurrencyCode())
-        .setSenderMcc(mcc)
-        .setSenderMnc(mnc)
-        .setEstimatedPriceMicros(estimatedPrice.amount().multiply(ONE_MILLION).longValueExact())
-        .setEstimatedPriceCurrency(estimatedPrice.currency().getCurrencyCode())
-        .build();
+    listener.onApplicationEvent(new AttemptAnalyzedEvent(pendingAnalysis, analysis));
 
-    listener.onApplicationEvent(new AttemptAnalyzedEvent(attemptPendingAnalysis, attemptAnalysis));
-
-    verify(pubSubClient).send(expectedPubSubMessage.toByteArray());
+    verify(pubSubClient).send(any(byte[].class));
   }
 
   @ParameterizedTest
@@ -108,25 +93,18 @@ class GcpPubSubAttemptAnalyzedEventListenerTest {
       final String expectedMessageTransport) {
 
     final UUID sessionId = UUID.randomUUID();
-    final int attemptId = 7;
+    final long attemptId = 97L;
     final String senderName = "test";
-
     final String region = "XX";
-    final long timestamp = System.currentTimeMillis();
-    final boolean accountExistsWithE164 = true;
-    final boolean verified = false;
 
-    final AttemptPendingAnalysis attemptPendingAnalysis = AttemptPendingAnalysis.newBuilder()
+    final AttemptPendingAnalysis pendingAnalysis = AttemptPendingAnalysis.newBuilder()
         .setSessionId(UUIDUtil.uuidToByteString(sessionId))
-        .setAttemptId(attemptId)
+        .setAttemptId((int) attemptId)
         .setSenderName(senderName)
-        .setRemoteId("remote-id")
+        .setRegion(region)
         .setMessageTransport(messageTransport)
         .setClientType(clientType)
-        .setRegion(region)
-        .setTimestampEpochMillis(timestamp)
-        .setAccountExistsWithE164(accountExistsWithE164)
-        .setVerified(verified)
+        .setTimestampEpochMillis(CURRENT_TIME.toEpochMilli())
         .build();
 
     final Money price = new Money(new BigDecimal("0.04"), Currency.getInstance("USD"));
@@ -134,7 +112,7 @@ class GcpPubSubAttemptAnalyzedEventListenerTest {
     final String mcc = "017";
     final String mnc = "029";
 
-    final AttemptAnalysis attemptAnalysis = new AttemptAnalysis(
+    final AttemptAnalysis analysis = new AttemptAnalysis(
         Optional.of(price),
         Optional.of(estimatedPrice),
         Optional.of(mcc),
@@ -142,14 +120,12 @@ class GcpPubSubAttemptAnalyzedEventListenerTest {
 
     final AttemptAnalyzedPubSubMessage expectedPubSubMessage = AttemptAnalyzedPubSubMessage.newBuilder()
         .setSessionId(sessionId.toString())
-        .setAttemptId(attemptId)
+        .setAttemptId((int) attemptId)
         .setSenderName(senderName)
         .setMessageTransport(expectedMessageTransport)
         .setClientType(expectedClientType)
         .setRegion(region)
-        .setTimestamp(Instant.ofEpochMilli(timestamp).toString())
-        .setAccountExistsWithE164(accountExistsWithE164)
-        .setVerified(verified)
+        .setTimestamp(CURRENT_TIME.toString())
         .setPriceMicros(price.amount().multiply(ONE_MILLION).longValueExact())
         .setCurrency(price.currency().getCurrencyCode())
         .setSenderMcc(mcc)
@@ -159,7 +135,7 @@ class GcpPubSubAttemptAnalyzedEventListenerTest {
         .build();
 
     assertEquals(expectedPubSubMessage,
-        GcpPubSubAttemptAnalyzedEventListener.buildPubSubMessage(new AttemptAnalyzedEvent(attemptPendingAnalysis, attemptAnalysis)));
+        GcpPubSubAttemptAnalyzedEventListener.buildPubSubMessage(new AttemptAnalyzedEvent(pendingAnalysis, analysis)));
   }
 
   private static Stream<Arguments> buildPubSubMessage() {

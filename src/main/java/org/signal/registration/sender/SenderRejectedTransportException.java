@@ -15,4 +15,8 @@ public class SenderRejectedTransportException extends SenderRejectedRequestExcep
   public SenderRejectedTransportException(final Throwable cause) {
     super(cause);
   }
+
+  public SenderRejectedTransportException(final String message) {
+    super(message);
+  }
 }

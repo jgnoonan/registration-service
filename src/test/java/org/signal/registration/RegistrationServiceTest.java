@@ -1,13 +1,37 @@
 package org.signal.registration;
 
+// Google imports
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.protobuf.ByteString;
+
+// Micronaut imports
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
+import io.micronaut.context.annotation.Factory;
+import io.micronaut.context.annotation.Replaces;
+import io.micronaut.test.annotation.MockBean;
+
+// Jakarta imports
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
+
+// JUnit imports
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import static org.junit.jupiter.api.Assertions.*;
+
+// Mockito imports
+import org.mockito.Mockito;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+// Signal registration imports
 import org.signal.registration.sender.AttemptData;
 import org.signal.registration.sender.ClientType;
 import org.signal.registration.sender.MessageTransport;
@@ -18,6 +42,7 @@ import org.signal.registration.sender.SenderSelectionStrategy;
 import org.signal.registration.sender.VerificationCodeSender;
 import org.signal.registration.session.RegistrationSession;
 import org.signal.registration.session.SessionMetadata;
+import org.signal.registration.session.SessionNotFoundException;
 import org.signal.registration.session.SessionRepository;
 import org.signal.registration.session.FailedSendReason;
 import org.signal.registration.session.RegistrationAttempt;
@@ -26,10 +51,10 @@ import org.signal.registration.ratelimit.RateLimitExceededException;
 import org.signal.registration.ldap.LdapService;
 import org.signal.registration.util.UUIDUtil;
 import org.signal.registration.util.MessageTransports;
-import org.signal.registration.VerificationCodeMismatchException;
-import org.signal.registration.session.SessionNotFoundException;
 import org.signal.registration.NoVerificationAttemptsException;
+import org.signal.registration.VerificationCodeMismatchException;
 
+// Java imports
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -42,20 +67,14 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
-
 /**
  * Tests for {@link RegistrationService} which handles phone number verification and registration sessions.
  */
+@MicronautTest(environments = "test", startApplication = false)
 class RegistrationServiceTest {
-    // Service under test
+    @Inject
     private RegistrationService registrationService;
 
-    // Mocked dependencies
     private VerificationCodeSender sender;
     private SessionRepository sessionRepository;
     private RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter;
@@ -65,6 +84,71 @@ class RegistrationServiceTest {
     private Clock clock;
     private SenderSelectionStrategy senderSelectionStrategy;
     private LdapService ldapService;
+
+    @BeforeEach
+    void setUp() {
+        when(clock.instant()).thenReturn(CURRENT_TIME);
+        when(sender.getName()).thenReturn(SENDER_NAME);
+        when(senderSelectionStrategy.chooseVerificationCodeSender(any(), any(), any(), any(), any(), any()))
+            .thenReturn(null);
+    }
+
+    @MockBean(Clock.class)
+    Clock clock() {
+        return mock(Clock.class);
+    }
+
+    @MockBean(VerificationCodeSender.class)
+    VerificationCodeSender mockVerificationCodeSender() {
+        sender = mock(VerificationCodeSender.class);
+        return sender;
+    }
+
+    @MockBean(SessionRepository.class)
+    SessionRepository mockSessionRepository() {
+        sessionRepository = mock(SessionRepository.class);
+        return sessionRepository;
+    }
+
+    @MockBean(SenderSelectionStrategy.class)
+    SenderSelectionStrategy mockSenderSelectionStrategy() {
+        senderSelectionStrategy = mock(SenderSelectionStrategy.class);
+        return senderSelectionStrategy;
+    }
+
+    @MockBean(LdapService.class)
+    LdapService mockLdapService() {
+        ldapService = mock(LdapService.class);
+        return ldapService;
+    }
+
+    @Named("session-creation")
+    @MockBean(RateLimiter.class)
+    RateLimiter<Phonenumber.PhoneNumber> mockSessionCreationRateLimiter() {
+        sessionCreationRateLimiter = mock(RateLimiter.class);
+        return sessionCreationRateLimiter;
+    }
+
+    @Named("send-sms-verification-code")
+    @MockBean(RateLimiter.class)
+    RateLimiter<RegistrationSession> mockSendSmsVerificationCodeRateLimiter() {
+        sendSmsVerificationCodeRateLimiter = mock(RateLimiter.class);
+        return sendSmsVerificationCodeRateLimiter;
+    }
+
+    @Named("send-voice-verification-code")
+    @MockBean(RateLimiter.class)
+    RateLimiter<RegistrationSession> mockSendVoiceVerificationCodeRateLimiter() {
+        sendVoiceVerificationCodeRateLimiter = mock(RateLimiter.class);
+        return sendVoiceVerificationCodeRateLimiter;
+    }
+
+    @Named("check-verification-code")
+    @MockBean(RateLimiter.class)
+    RateLimiter<RegistrationSession> mockCheckVerificationCodeRateLimiter() {
+        checkVerificationCodeRateLimiter = mock(RateLimiter.class);
+        return checkVerificationCodeRateLimiter;
+    }
 
     // Test constants
     private static final String TEST_PHONE_NUMBER = "+919703804045";
@@ -86,42 +170,6 @@ class RegistrationServiceTest {
             .setAccountExistsWithE164(false)
             .build();
     private static final Instant CURRENT_TIME = Instant.now().truncatedTo(ChronoUnit.MILLIS);
-
-    @BeforeEach
-    void setUp() {
-        // Initialize mocks
-        sender = mock(VerificationCodeSender.class);
-        sessionRepository = mock(SessionRepository.class);
-        sessionCreationRateLimiter = mock(RateLimiter.class);
-        sendSmsVerificationCodeRateLimiter = mock(RateLimiter.class);
-        sendVoiceVerificationCodeRateLimiter = mock(RateLimiter.class);
-        checkVerificationCodeRateLimiter = mock(RateLimiter.class);
-        clock = mock(Clock.class);
-        senderSelectionStrategy = mock(SenderSelectionStrategy.class);
-        ldapService = mock(LdapService.class);
-
-        // Configure default mock behavior
-        when(clock.instant()).thenReturn(CURRENT_TIME);
-        when(sender.getName()).thenReturn(SENDER_NAME);
-        when(sessionCreationRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
-        when(sendSmsVerificationCodeRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
-        when(sendVoiceVerificationCodeRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
-        when(checkVerificationCodeRateLimiter.checkRateLimit(any())).thenReturn(CompletableFuture.completedFuture(null));
-
-        // Create service instance
-        registrationService = new RegistrationService(
-                senderSelectionStrategy,
-                sessionRepository,
-                sessionCreationRateLimiter,
-                sendSmsVerificationCodeRateLimiter,
-                sendVoiceVerificationCodeRateLimiter,
-                checkVerificationCodeRateLimiter,
-                List.of(sender),
-                clock,
-                ldapService,
-                true
-        );
-    }
 
     @Test
     void createSession() {
@@ -181,16 +229,6 @@ class RegistrationServiceTest {
         // Setup sender mock
         when(sender.sendVerificationCode(any(MessageTransport.class), any(Phonenumber.PhoneNumber.class), anyList(), any(ClientType.class)))
             .thenReturn(CompletableFuture.completedFuture(new AttemptData(Optional.of(remoteId), VERIFICATION_CODE_BYTES)));
-
-        // Setup sender selection strategy
-        when(senderSelectionStrategy.chooseVerificationCodeSender(
-            any(MessageTransport.class),
-            any(Phonenumber.PhoneNumber.class),
-            any(List.class),
-            any(ClientType.class),
-            any(),
-            any()))
-            .thenReturn(new SenderSelectionStrategy.SenderSelection(sender, SenderSelectionStrategy.SelectionReason.CONFIGURED));
 
         // Execute test
         RegistrationSession updatedSession = registrationService.sendVerificationCode(
@@ -408,15 +446,6 @@ class RegistrationServiceTest {
         when(sender.sendVerificationCode(any(MessageTransport.class), any(Phonenumber.PhoneNumber.class), anyList(), any(ClientType.class)))
             .thenReturn(CompletableFuture.failedFuture(new SenderRejectedTransportException("Transport not allowed")));
 
-        when(senderSelectionStrategy.chooseVerificationCodeSender(
-            any(MessageTransport.class),
-            any(Phonenumber.PhoneNumber.class),
-            any(List.class),
-            any(ClientType.class),
-            any(),
-            any()))
-            .thenReturn(new SenderSelectionStrategy.SenderSelection(sender, SenderSelectionStrategy.SelectionReason.CONFIGURED));
-
         // Execute and verify
         CompletionException exception = assertThrows(CompletionException.class,
             () -> registrationService.sendVerificationCode(
@@ -444,15 +473,6 @@ class RegistrationServiceTest {
         when(sender.sendVerificationCode(any(MessageTransport.class), any(Phonenumber.PhoneNumber.class), anyList(), any(ClientType.class)))
             .thenReturn(CompletableFuture.failedFuture(new SenderFraudBlockException("Fraud detected")));
 
-        when(senderSelectionStrategy.chooseVerificationCodeSender(
-            any(MessageTransport.class),
-            any(Phonenumber.PhoneNumber.class),
-            any(List.class),
-            any(ClientType.class),
-            any(),
-            any()))
-            .thenReturn(new SenderSelectionStrategy.SenderSelection(sender, SenderSelectionStrategy.SelectionReason.CONFIGURED));
-
         // Execute and verify
         CompletionException exception = assertThrows(CompletionException.class,
             () -> registrationService.sendVerificationCode(
@@ -477,13 +497,7 @@ class RegistrationServiceTest {
                 .setPhoneNumber(PhoneNumberUtil.getInstance().format(PHONE_NUMBER, PhoneNumberUtil.PhoneNumberFormat.E164))
                 .build()));
 
-        when(senderSelectionStrategy.chooseVerificationCodeSender(
-            any(MessageTransport.class),
-            any(Phonenumber.PhoneNumber.class),
-            any(List.class),
-            any(ClientType.class),
-            any(),
-            any()))
+        when(senderSelectionStrategy.chooseVerificationCodeSender(any(), any(), any(), any(), any(), any()))
             .thenReturn(null);
 
         // Execute and verify
@@ -579,15 +593,6 @@ class RegistrationServiceTest {
         when(sender.sendVerificationCode(any(MessageTransport.class), any(Phonenumber.PhoneNumber.class), anyList(), any(ClientType.class)))
             .thenReturn(CompletableFuture.completedFuture(new AttemptData(Optional.of(remoteId), VERIFICATION_CODE_BYTES)));
 
-        when(senderSelectionStrategy.chooseVerificationCodeSender(
-            any(MessageTransport.class),
-            any(Phonenumber.PhoneNumber.class),
-            any(List.class),
-            any(ClientType.class),
-            any(),
-            any()))
-            .thenReturn(new SenderSelectionStrategy.SenderSelection(sender, SenderSelectionStrategy.SelectionReason.CONFIGURED));
-
         // Execute test
         RegistrationSession updatedSession = registrationService.sendVerificationCode(
             MessageTransport.VOICE,
@@ -655,15 +660,6 @@ class RegistrationServiceTest {
 
         when(sender.sendVerificationCode(any(MessageTransport.class), any(Phonenumber.PhoneNumber.class), anyList(), any(ClientType.class)))
             .thenReturn(CompletableFuture.completedFuture(new AttemptData(Optional.of(secondRemoteId), VERIFICATION_CODE_BYTES)));
-
-        when(senderSelectionStrategy.chooseVerificationCodeSender(
-            any(MessageTransport.class),
-            any(Phonenumber.PhoneNumber.class),
-            any(List.class),
-            any(ClientType.class),
-            any(),
-            any()))
-            .thenReturn(new SenderSelectionStrategy.SenderSelection(sender, SenderSelectionStrategy.SelectionReason.CONFIGURED));
 
         // Execute test - send a second verification code
         RegistrationSession updatedSession = registrationService.sendVerificationCode(

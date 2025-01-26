@@ -1,6 +1,11 @@
 micronaut:
   application:
     name: registrationService-test
+  server:
+    port: -1  # Disable HTTP server
+  grpc:
+    server:
+      port: 50051
   environments:
     development:
       environments: true
@@ -8,18 +13,46 @@ micronaut:
     registration:
       useLdap: true
       ldap:
-        url: ldap://localhost:389
-        baseDn: dc=valuelabs,dc=com
-        bindDn: cn=admin,dc=valuelabs,dc=com
-        bindPassword: Rat3onal
+        url: ldap://localhost:11389  # Use test port
+        baseDn: dc=test,dc=com
+        bindDn: cn=admin,dc=test,dc=com
+        bindPassword: test
         userFilter: (|(uid={0})(mail={0}))
         phoneNumberAttribute: mobile
         useSsl: false
-        minPoolSize: 3
-        maxPoolSize: 10
-        poolTimeout: 300000
-        testUser: raja@valuelabs.com
-        testUserPassword: Rat3onal
+        minPoolSize: 1
+        maxPoolSize: 3
+        poolTimeout: 1000
+        testUser: test@test.com
+        testUserPassword: test
+  metrics:
+    enabled: true
+    export:
+      datadog:
+        enabled: false
+      prometheus:
+        enabled: true
+        step: PT1M
+        descriptions: true
+
+twilio:
+  verify:
+    service-sid: test-service-sid
+    service-friendly-name: test-service
+    android-app-hash: test-hash
+    custom-template-sid: test-template
+    custom-template-supported-languages: []
+    supported-languages: []
+
+# Metrics configuration
+micronaut:
+  metrics:
+    enabled: true
+    export:
+      prometheus:
+        enabled: true
+        step: PT1M
+        descriptions: true
 
 # Test-specific configurations
 test:
@@ -28,6 +61,8 @@ test:
   useLdap: true
   testUser: raja@valuelabs.com
   testUserPassword: Rat3onal
+  verification:
+    use-phone-number-suffix: true
 
 # Configure rate limiters for testing
 rateLimits:
@@ -52,3 +87,24 @@ rateLimits:
       maxCapacity: 100
       permitRegenerationPeriod: 1s
       minDelay: 0s
+
+rate-limits:
+  send-sms-verification-code:
+    delays: 1s,2s,5s,10s
+  send-voice-verification-code:
+    delays: 1s,2s,5s,10s
+  check-verification-code:
+    delays: 1s,2s,5s,10s
+
+# Sender selection configuration
+selection:
+  sms:
+    fallback-senders: []
+    default-weights: {}
+    region-weights: {}
+    region-overrides: {}
+  voice:
+    fallback-senders: []
+    default-weights: {}
+    region-weights: {}
+    region-overrides: {}

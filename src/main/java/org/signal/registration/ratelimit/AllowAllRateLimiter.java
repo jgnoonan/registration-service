@@ -16,11 +16,11 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <K> the type of key that identifies a rate-limited action
  */
-class AllowAllRateLimiter<K> implements RateLimiter<K> {
+public class AllowAllRateLimiter<K> implements RateLimiter<K> {
 
   private final Clock clock;
 
-  AllowAllRateLimiter(final Clock clock) {
+  public AllowAllRateLimiter(final Clock clock) {
     this.clock = clock;
   }
 

@@ -84,6 +84,15 @@ public abstract class RedisLeakyBucketRateLimiter<K> implements RateLimiter<K> {
    */
   protected abstract boolean shouldFailOpen();
 
+  /**
+   * Gets the Redis connection. Protected for testing purposes only.
+   *
+   * @return the Redis connection
+   */
+  protected StatefulRedisConnection<String, String> getConnection() {
+    return connection;
+  }
+
   @Override
   public CompletableFuture<Optional<Instant>> getTimeOfNextAction(final K key) {
     return executeScript(getBucketName(key), false)

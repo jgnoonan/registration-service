@@ -13,7 +13,13 @@ import org.signal.registration.ldap.dto.ValidationResponse;
 import org.signal.registration.ldap.util.ValidationCodeUtil;
 import org.signal.registration.sender.prescribed.PrescribedVerificationCodeSender;
 import org.signal.registration.sender.prescribed.PrescribedVerificationCodeRepository;
+import org.signal.registration.sender.SenderSelectionStrategy;
+import org.signal.registration.session.SessionRepository;
+import org.signal.registration.session.RegistrationSession;
+import org.signal.registration.ratelimit.RateLimiter;
+import com.google.i18n.phonenumbers.Phonenumber.PhoneNumber;
 
+import java.time.Clock;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,7 +29,7 @@ import static org.mockito.Mockito.*;
  * Tests for the LDAP validation controller.
  * Verifies the validation endpoint behavior for various scenarios.
  */
-@MicronautTest(environments = "test")
+@MicronautTest(environments = "test", startApplication = false)
 public class LdapValidationControllerTest {
 
     @Inject
@@ -33,13 +39,19 @@ public class LdapValidationControllerTest {
     private ValidationCodeUtil validationCodeUtil;
     private PrescribedVerificationCodeSender prescribedVerificationCodeSender;
     private PrescribedVerificationCodeRepository prescribedVerificationCodeRepository;
+    private SenderSelectionStrategy senderSelectionStrategy;
+    private SessionRepository sessionRepository;
+    private Clock clock;
 
     @BeforeEach
     void setup() {
         ldapService = mock(LdapService.class);
-        validationCodeUtil = new ValidationCodeUtil();
+        validationCodeUtil = mock(ValidationCodeUtil.class);
         prescribedVerificationCodeSender = mock(PrescribedVerificationCodeSender.class);
         prescribedVerificationCodeRepository = mock(PrescribedVerificationCodeRepository.class);
+        senderSelectionStrategy = mock(SenderSelectionStrategy.class);
+        sessionRepository = mock(SessionRepository.class);
+        clock = Clock.systemUTC();
     }
 
     @MockBean(LdapService.class)
@@ -62,6 +74,21 @@ public class LdapValidationControllerTest {
         return prescribedVerificationCodeRepository;
     }
 
+    @MockBean(SenderSelectionStrategy.class)
+    SenderSelectionStrategy senderSelectionStrategy() {
+        return senderSelectionStrategy;
+    }
+
+    @MockBean(SessionRepository.class)
+    SessionRepository sessionRepository() {
+        return sessionRepository;
+    }
+
+    @MockBean(Clock.class)
+    Clock clock() {
+        return clock;
+    }
+
     @Test
     void testSuccessfulValidation() {
         ValidationRequest request = new ValidationRequest("test@example.com", "password123");
@@ -70,6 +97,9 @@ public class LdapValidationControllerTest {
         
         when(ldapService.authenticateAndGetPhoneNumber(request.getUserId(), request.getPassword()))
             .thenReturn(Optional.of(phoneNumber));
+            
+        when(validationCodeUtil.generateValidationCode(phoneNumber))
+            .thenReturn(expectedValidationCode);
 
         HttpResponse<ValidationResponse> response = controller.validateCredentials(request);
 

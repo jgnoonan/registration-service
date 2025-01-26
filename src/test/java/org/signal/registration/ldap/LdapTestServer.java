@@ -38,7 +38,7 @@ public class LdapTestServer {
         // Create server configuration
         InMemoryDirectoryServerConfig config = new InMemoryDirectoryServerConfig(baseDn);
         config.setSchema(null); // Disable schema validation
-        config.setListenerConfigs(InMemoryListenerConfig.createLDAPConfig("LDAP", 389));
+        config.setListenerConfigs(InMemoryListenerConfig.createLDAPConfig("LDAP", 11389));
         
         // Set admin bind credentials
         String adminDn = "cn=admin," + baseDn;
@@ -90,7 +90,7 @@ public class LdapTestServer {
 
         // Start the server
         server.startListening();
-        LOG.info("LDAP test server started on port 389");
+        LOG.info("LDAP test server started on port 11389");
 
         return server;
     }

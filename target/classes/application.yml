@@ -2,6 +2,11 @@
 micronaut:
   application:
     name: registrationService
+  metrics:
+    enabled: true
+    export:
+      datadog:
+        enabled: false
   environments:
     development:
       micronaut:
@@ -37,27 +42,6 @@ micronaut:
       config:
         registration:
           useLdap: true
-  server:
-    host: 0.0.0.0
-    port: 8080
-    httpVersion: 1.1
-    cors:
-      enabled: true
-      configurations:
-        web:
-          allowedOrigins:
-            - http://localhost:8080  # For testing
-          allowedMethods:
-            - POST
-            - OPTIONS
-          allowedHeaders:
-            - Content-Type
-            - Authorization
-  metrics:
-    enabled: false
-    export:
-      datadog:
-        enabled: false
   executors:
     scheduled:
       type: scheduled
@@ -117,6 +101,7 @@ infobip:
 selection:
   sms:
     transport: NONE
+    fallbackSenders: ["last-digits-of-phone-number"]
   voice:
     transport: VOICE
     fallbackSenders: ["last-digits-of-phone-number"]
