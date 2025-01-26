@@ -5,6 +5,7 @@
 
 package org.signal.registration.session.bigtable;
 
+import com.google.cloud.bigtable.data.v2.models.TableId;
 import com.google.cloud.bigtable.data.v2.BigtableDataClient;
 import com.google.cloud.bigtable.data.v2.models.ConditionalRowMutation;
 import com.google.cloud.bigtable.data.v2.models.Filters;
@@ -13,7 +14,6 @@ import com.google.cloud.bigtable.data.v2.models.Query;
 import com.google.cloud.bigtable.data.v2.models.Row;
 import com.google.cloud.bigtable.data.v2.models.RowCell;
 import com.google.cloud.bigtable.data.v2.models.RowMutation;
-import com.google.cloud.bigtable.data.v2.models.TableId;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
@@ -76,7 +76,7 @@ class BigtableSessionRepository implements SessionRepository {
   private final ApplicationEventPublisher<SessionCompletedEvent> sessionCompletedEventPublisher;
   private final Clock clock;
   
-  private final TableId tableId;
+  private final com.google.cloud.bigtable.data.v2.models.TableId tableId;
   private final String columnFamilyName;
 
   private final Timer createSessionTimer;
@@ -111,7 +111,7 @@ class BigtableSessionRepository implements SessionRepository {
     this.sessionCompletedEventPublisher = sessionCompletedEventPublisher;
     this.clock = clock;
     
-    this.tableId = TableId.of(configuration.tableName());
+    this.tableId = com.google.cloud.bigtable.data.v2.models.TableId.of(configuration.tableName());
     this.columnFamilyName = configuration.columnFamilyName();
 
     this.createSessionTimer = meterRegistry.timer(MetricsUtil.name(getClass(), "createSession"));
@@ -254,7 +254,7 @@ class BigtableSessionRepository implements SessionRepository {
           final Instant expiration = Instant.ofEpochMilli(updatedSession.getExpirationEpochMillis());
 
           return GoogleApiUtil.toCompletableFuture(bigtableDataClient.checkAndMutateRowAsync(
-                      ConditionalRowMutation.create(tableId, UUIDUtil.uuidToByteString(sessionId))
+                      ConditionalRowMutation.create(tableId, session.getId())
                           .condition(Filters.FILTERS.chain()
                               .filter(Filters.FILTERS.family().exactMatch(columnFamilyName))
                               .filter(Filters.FILTERS.qualifier().exactMatch(DATA_COLUMN_NAME))
@@ -292,7 +292,7 @@ class BigtableSessionRepository implements SessionRepository {
     }
 
     try {
-      return RegistrationSession.parseFrom(cells.getFirst().getValue());
+      return RegistrationSession.parseFrom(cells.get(0).getValue());
     } catch (final InvalidProtocolBufferException e) {
       logger.error("Failed to parse registration session", e);
       throw new UncheckedIOException(e);

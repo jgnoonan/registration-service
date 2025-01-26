@@ -8,7 +8,6 @@ package org.signal.registration.analytics;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import io.micronaut.configuration.metrics.annotation.RequiresMetrics;
 import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.ApplicationEventListener;
 import jakarta.inject.Singleton;
@@ -24,9 +23,8 @@ import org.slf4j.LoggerFactory;
  * events that include a price.
  */
 @Singleton
-@RequiresMetrics
-@Requires(env = Environments.ANALYTICS)
-class AttemptPriceMetricsListener implements ApplicationEventListener<AttemptAnalyzedEvent> {
+@Requires(property = "analytics.attempt-price.enabled", notEquals = "false")
+public class AttemptPriceMetricsListener implements ApplicationEventListener<AttemptAnalyzedEvent> {
 
   private final MeterRegistry meterRegistry;
 

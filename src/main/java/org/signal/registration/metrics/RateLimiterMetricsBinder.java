@@ -7,7 +7,6 @@ package org.signal.registration.metrics;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import io.micronaut.configuration.metrics.annotation.RequiresMetrics;
 import io.micronaut.context.BeanProvider;
 import io.micronaut.context.event.BeanCreatedEvent;
 import io.micronaut.context.event.BeanCreatedEventListener;
@@ -24,7 +23,6 @@ import java.util.concurrent.CompletableFuture;
  * rate limits and the outcomes (whether the action was rate-limited) of rate limit checks.
  */
 @Singleton
-@RequiresMetrics
 public class RateLimiterMetricsBinder implements BeanCreatedEventListener<RateLimiter<?>> {
 
   private final BeanProvider<MeterRegistry> meterRegistryProvider;

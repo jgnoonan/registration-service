@@ -14,22 +14,34 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.signal.registration.analytics.AttemptAnalyzedEvent;
+import org.signal.registration.analytics.AttemptAnalysis;
+import org.signal.registration.analytics.AttemptPendingAnalysis;
 import org.signal.registration.rpc.ClientType;
 import org.signal.registration.rpc.MessageTransport;
 import org.signal.registration.sender.AttemptData;
 import org.signal.registration.sender.MessageTransportFailure;
 import org.signal.registration.session.FailedSendReason;
 import org.signal.registration.session.SessionMetadata;
+import org.signal.registration.util.UUIDUtil;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Currency;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.signal.registration.analytics.Money;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class GcpPubSubAttemptAnalyzedEventListenerTest {
 

@@ -9,7 +9,7 @@ import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
 import com.google.i18n.phonenumbers.Phonenumber;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micronaut.configuration.metrics.annotation.RequiresMetrics;
+import io.micrometer.core.instrument.Timer;
 import io.micronaut.context.event.ApplicationEventListener;
 import jakarta.inject.Singleton;
 import java.util.Optional;
@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
  * A session outcome listener reports basic metrics about completed sessions.
  */
 @Singleton
-@RequiresMetrics
 public class SessionOutcomeListener implements ApplicationEventListener<SessionCompletedEvent> {
 
   private final MeterRegistry meterRegistry;
