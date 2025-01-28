@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>org.signal.registration</groupId>
+  <artifactId>registration-service</artifactId>
+  <version>JGITVER</version>
+  <packaging>jar</packaging>
+
+  <parent>
+    <groupId>io.micronaut.platform</groupId>
+    <artifactId>micronaut-parent</artifactId>
+    <version>4.6.3</version>
+  </parent>
+
+  <properties>
+    <jdk.version>21</jdk.version>
+    <release.version>21</release.version>
+    <micronaut.version>4.6.3</micronaut.version>
+    <micronaut.test.version>4.2.0</micronaut.test.version>
+    <micronaut.serialization.version>2.8.2</micronaut.serialization.version>
+    <junit.jupiter.version>5.10.1</junit.jupiter.version>
+    <testcontainers.version>1.20.4</testcontainers.version>
+    <reactive.grpc.version>1.2.4</reactive.grpc.version>
+    <micronaut.picocli.version>5.6.0</micronaut.picocli.version>
+    <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
+    <exec.mainClass>org.signal.registration.Application</exec.mainClass>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+    </repository>
+    <repository>
+      <id>micronaut-releases</id>
+      <url>https://s01.oss.sonatype.org/content/repositories/releases</url>
+    </repository>
+  </repositories>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Micronaut Picocli BOM -->
+      <dependency>
+        <groupId>io.micronaut.picocli</groupId>
+        <artifactId>micronaut-picocli-bom</artifactId>
+        <version>${micronaut.picocli.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.cloud</groupId>
+        <artifactId>libraries-bom</artifactId>
+        <version>26.49.0</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.micronaut.micrometer</groupId>
+        <artifactId>micronaut-micrometer-bom</artifactId>
+        <version>5.4.0</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.jupiter.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-inject</artifactId>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-inject-java</artifactId>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut</groupId>
+      <artifactId>micronaut-http-server-netty</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut.gcp</groupId>
+      <artifactId>micronaut-gcp-pubsub</artifactId>
+      <version>4.7.0</version>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut.validation</groupId>
+      <artifactId>micronaut-validation</artifactId>
+      <version>4.8.0</version>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut.serde</groupId>
+      <artifactId>micronaut-serde-jackson</artifactId>
+      <version>${micronaut.serialization.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut.test</groupId>
+      <artifactId>micronaut-test-junit5</artifactId>
+      <version>${micronaut.test.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>32.1.2-jre</version>
+    </dependency>
+    <dependency>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli-codegen</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.micronaut.picocli</groupId>
+      <artifactId>micronaut-picocli</artifactId>
+    </dependency>
+
+    <!-- JUnit Dependencies -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- TestContainers -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
+      <version>${testcontainers.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Miscellaneous -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
+      <version>3.12.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-csv</artifactId>
+      <version>1.10.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.googlecode.libphonenumber</groupId>
+      <artifactId>libphonenumber</artifactId>
+      <version>8.13.27</version>
+    </dependency>
+
+    <dependency>
+      <groupId>io.projectreactor</groupId>
+      <artifactId>reactor-core</artifactId>
+      <version>3.6.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-bigtable</artifactId>
+      <version>2.34.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.infobip</groupId>
+      <artifactId>infobip-api-java-client</artifactId>
+      <version>4.1.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.messagebird</groupId>
+      <artifactId>messagebird-api</artifactId>
+      <version>4.0.0</version>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <extensions>
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>1.7.0</version>
+      </extension>
+    </extensions>
+
+    <plugins>
+      <!-- Compiler Plugin -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>${release.version}</release>
+          <source>${jdk.version}</source>
+          <target>${jdk.version}</target>
+          <encoding>${maven.compiler.encoding}</encoding>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>io.micronaut</groupId>
+              <artifactId>micronaut-inject-java</artifactId>
+              <version>${micronaut.version}</version>
+            </path>
+            <path>
+              <groupId>io.micronaut.serde</groupId>
+              <artifactId>micronaut-serde-processor</artifactId>
+              <version>${micronaut.serialization.version}</version>
+            </path>
+            <path>
+              <groupId>com.google.guava</groupId>
+              <artifactId>guava</artifactId>
+              <version>32.1.2-jre</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+
+      <!-- Surefire Plugin for Testing -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*Spec.java</include>
+          </includes>
+          <excludes>
+            <exclude>**/Abstract*.java</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+
+      <!-- Jib Plugin for Containerization -->
+      <plugin>
+        <groupId>com.google.cloud.tools</groupId>
+        <artifactId>jib-maven-plugin</artifactId>
+        <version>3.4.0</version>
+        <configuration>
+          <from>
+            <image>eclipse-temurin:21</image>
+          </from>
+          <container>
+            <mainClass>${exec.mainClass}</mainClass>
+          </container>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -18,26 +18,6 @@ micronaut:
       config:
         registration:
           useLdap: true
-          ldap:
-            # LDAP server connection settings
-            url: ldap://localhost:389
-            baseDn: dc=valuelabs,dc=com
-            useSsl: false
-            trustStore: /Users/jgnoonan/registration-service/src/main/resources/certs/truststore.jks
-            trustStorePassword: changeit
-            trustStoreType: JKS
-            hostnameVerification: true
-            connectionTimeout: 30000
-            readTimeout: 30000
-            minPoolSize: 3
-            maxPoolSize: 10
-            poolTimeout: 300000
-            maxRetries: 3
-            userFilter: (uid={0})
-            bindDn: cn=admin,dc=valuelabs,dc=com
-            bindPassword: Rat3onal
-            phoneNumberAttribute: mobile
-            testPhoneNumber: +12025550123
     production:
       config:
         registration:
@@ -81,7 +61,6 @@ micronaut:
         bindDn: cn=admin,dc=valuelabs,dc=com
         bindPassword: Rat3onal
         phoneNumberAttribute: mobile
-        testPhoneNumber: +12025550123
 
 messagebird:
   enabled: false
