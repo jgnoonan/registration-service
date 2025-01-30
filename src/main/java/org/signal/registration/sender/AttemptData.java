@@ -5,7 +5,7 @@
 
 package org.signal.registration.sender;
 
-import javax.annotation.Nullable;
+import io.micronaut.core.annotation.Nullable;
 import java.util.Optional;
 
 /**

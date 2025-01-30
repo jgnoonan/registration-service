@@ -11,7 +11,7 @@ micronaut:
       environments: true
   config:
     registration:
-      useLdap: true
+      useLdap: false
       ldap:
         url: ldap://localhost:11389  # Use test port
         baseDn: dc=test,dc=com
@@ -58,11 +58,40 @@ micronaut:
 test:
   mock:
     enabled: true
-  useLdap: true
+  useLdap: false
   testUser: raja@valuelabs.com
   testUserPassword: Rat3onal
   verification:
     use-phone-number-suffix: true
+
+ldap:
+  enabled: false
+  test-mode: true
+  url: "ldap://localhost:389"
+  base-dn: "dc=test,dc=local"
+  use-ssl: false
+
+redis:
+  uri: "redis://localhost:6379"
+  test-mode: true
+
+registration:
+  session:
+    duration: PT10M
+    attempts: 5
+  rate-limits:
+    session-creation:
+      bucket-size: 2
+      leak-rate-per-minute: 1
+    send-sms-verification-code:
+      bucket-size: 2
+      leak-rate-per-minute: 1
+    send-voice-verification-code:
+      bucket-size: 2
+      leak-rate-per-minute: 1
+    check-verification-code:
+      bucket-size: 2
+      leak-rate-per-minute: 1
 
 # Configure rate limiters for testing
 rateLimits:

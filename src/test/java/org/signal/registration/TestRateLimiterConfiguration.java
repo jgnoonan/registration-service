@@ -1,5 +1,6 @@
 package org.signal.registration;
 
+import com.google.i18n.phonenumbers.Phonenumber;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Requires;
 import jakarta.inject.Named;
@@ -20,6 +21,12 @@ public class TestRateLimiterConfiguration {
     }
 
     @Singleton
+    @Named("session-creation")
+    RateLimiter<Phonenumber.PhoneNumber> sessionCreationRateLimiter() {
+        return new TestRateLimiter<>(clock);
+    }
+
+    @Singleton
     @Named("send-sms-verification-code")
     RateLimiter<RegistrationSession> sendSmsVerificationCodeRateLimiter() {
         return new TestRateLimiter<>(clock);
@@ -34,6 +41,12 @@ public class TestRateLimiterConfiguration {
     @Singleton
     @Named("check-verification-code")
     RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter() {
+        return new TestRateLimiter<>(clock);
+    }
+
+    @Singleton
+    @Named("test-redis-rate-limiter")
+    RateLimiter<String> redisRateLimiter() {
         return new TestRateLimiter<>(clock);
     }
 }

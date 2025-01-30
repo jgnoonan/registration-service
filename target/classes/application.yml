@@ -42,6 +42,11 @@ micronaut:
       delays: 60s
   config:
     registration:
+      # Directory service type configuration
+      directory:
+        type: ENTRA_ID  # Can be LDAP or ENTRA_ID
+
+      # LDAP Configuration
       ldap:
         # LDAP server connection settings
         url: ldap://localhost:389
@@ -61,6 +66,15 @@ micronaut:
         bindDn: cn=admin,dc=valuelabs,dc=com
         bindPassword: Rat3onal
         phoneNumberAttribute: mobile
+
+      # Microsoft Entra ID Configuration (formerly Azure AD)
+      entra-id:
+        enabled: true
+        tenant-id: "2f8b8c95-8509-4822-a393-dc8f12d2c829"
+        client-id: "a7106d81-6dc4-42bf-bcf9-21666789ea05"
+        # Use either client-secret or certificate-path, not both
+        client-secret: ${ENTRA_CLIENT_SECRET}
+        # certificate-path: "${ENTRA_CERTIFICATE_PATH}"  # Alternative to client secret
 
 messagebird:
   enabled: false

@@ -6,7 +6,7 @@
 package org.signal.registration.sender;
 
 import com.google.i18n.phonenumbers.Phonenumber;
-import javax.annotation.Nullable;
+import io.micronaut.core.annotation.Nullable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;

@@ -5,6 +5,7 @@ import com.unboundid.util.ssl.JVMDefaultTrustManager;
 import com.unboundid.util.ssl.SSLUtil;
 import com.unboundid.util.ssl.TrustAllTrustManager;
 import jakarta.inject.Singleton;
+import org.signal.registration.directory.DirectoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,7 +25,7 @@ import java.util.Optional;
  * managing LDAP connections with SSL/TLS support, and retrieving user information.
  */
 @Singleton
-public class LdapService {
+public class LdapService implements DirectoryService {
     private static final Logger LOG = LoggerFactory.getLogger(LdapService.class);
     private final LdapConfiguration ldapConfiguration;
     private LDAPConnectionPool connectionPool;
@@ -43,6 +44,7 @@ public class LdapService {
      *
      * @throws LDAPException if an error occurs during initialization
      */
+    @Override
     public void initialize() throws LDAPException {
         LOG.info("Initializing LDAP service with configuration: url={}, baseDn={}, useSSL={}", 
             ldapConfiguration.getUrl(), ldapConfiguration.getBaseDn(), ldapConfiguration.isUseSsl());
@@ -71,103 +73,17 @@ public class LdapService {
     /**
      * Authenticates a user against the LDAP server and retrieves their phone number.
      *
-     * @param username the username to authenticate
+     * @param userId the user ID to authenticate
      * @param password the password to authenticate with
      * @return the user's phone number if authentication is successful, empty otherwise
      */
-    public Optional<String> authenticateAndGetPhoneNumber(String username, String password) {
-        int retryCount = 0;
-        while (true) {
-            try {
-                return tryAuthenticateAndGetPhoneNumber(username, password);
-            } catch (LDAPException e) {
-                if (!isRetryableError(e) || retryCount >= ldapConfiguration.getMaxRetries()) {
-                    LOG.error("LDAP authentication failed", e);
-                    return Optional.empty();
-                }
-                backoff(retryCount++);
-            }
-        }
-    }
-
-    /**
-     * Attempts to authenticate a user against the LDAP server and retrieve their phone number.
-     *
-     * @param username the username to authenticate
-     * @param password the password to authenticate with
-     * @return the user's phone number if authentication is successful, empty otherwise
-     * @throws LDAPException if an error occurs during authentication
-     */
-    private Optional<String> tryAuthenticateAndGetPhoneNumber(String username, String password) throws LDAPException {
-        LOG.debug("Attempting to authenticate and retrieve phone number for user: {}", username);
-        LDAPConnection connection = connectionPool.getConnection();
+    @Override
+    public Optional<String> authenticateAndGetPhoneNumber(String userId, String password) {
         try {
-            String userDn = findUserDn(connection, username);
-            if (userDn == null) {
-                LOG.info("User DN not found for username: {}", username);
-                return Optional.empty();
-            }
-            LOG.debug("Found user DN: {}", userDn);
-
-            // Verify password by binding
-            try {
-                LOG.debug("Attempting to bind with user credentials: {}", userDn);
-                LDAPConnection userConnection = new LDAPConnection(connection.getSocketFactory(),
-                        connection.getConnectionOptions(),
-                        connection.getConnectedAddress(),
-                        connection.getConnectedPort());
-                userConnection.bind(userDn, password);
-                LOG.debug("Successfully authenticated user: {}", username);
-                userConnection.close();
-            } catch (LDAPException e) {
-                LOG.info("Authentication failed for user {}: {}", username, e.getMessage());
-                return Optional.empty();
-            }
-
-            // Get phone number
-            Optional<String> phoneNumber = findPhoneNumber(connection, username);
-            if (phoneNumber.isPresent()) {
-                LOG.debug("Successfully retrieved phone number for user: {}", username);
-            } else {
-                LOG.warn("No phone number found for authenticated user: {}", username);
-            }
-            return phoneNumber;
-        } finally {
-            connectionPool.releaseConnection(connection);
-        }
-    }
-
-    /**
-     * Finds the DN (Distinguished Name) for a given username.
-     *
-     * @param connection the LDAP connection to use
-     * @param username the username to find the DN for
-     * @return the user's DN if found, null otherwise
-     * @throws LDAPException if an error occurs while searching for the user
-     */
-    private String findUserDn(LDAPConnection connection, String username) throws LDAPException {
-        if (username == null || username.isEmpty()) {
-            LOG.debug("Username is null or empty");
-            return null;
-        }
-        
-        String filter = String.format("(|(uid=%s)(mail=%s))", username, username);
-        LOG.debug("Searching for user DN with filter: {} in baseDn: {}", filter, ldapConfiguration.getBaseDn());
-        
-        SearchResultEntry entry = connection.searchForEntry(
-            ldapConfiguration.getBaseDn(),
-            SearchScope.SUB,
-            filter,
-            "dn"
-        );
-        
-        if (entry != null) {
-            String dn = entry.getDN();
-            LOG.debug("Found DN for user {}: {}", username, dn);
-            return dn;
-        } else {
-            LOG.debug("No DN found for user: {}", username);
-            return null;
+            return findPhoneNumber(connectionPool.getConnection(), userId);
+        } catch (LDAPException e) {
+            LOG.error("Failed to authenticate user or retrieve phone number", e);
+            return Optional.empty();
         }
     }
 
@@ -209,6 +125,16 @@ public class LdapService {
         
         LOG.debug("Found phone number for user {}: {}", username, phoneNumber);
         return Optional.of(phoneNumber);
+    }
+
+    /**
+     * Closes the LDAP connection pool.
+     */
+    @Override
+    public void cleanup() {
+        if (connectionPool != null) {
+            connectionPool.close();
+        }
     }
 
     /**
@@ -313,14 +239,5 @@ public class LdapService {
         return e.getResultCode() == ResultCode.CONNECT_ERROR ||
                e.getResultCode() == ResultCode.SERVER_DOWN ||
                e.getResultCode() == ResultCode.TIMEOUT;
-    }
-
-    /**
-     * Closes the LDAP connection pool.
-     */
-    public void cleanup() {
-        if (connectionPool != null) {
-            connectionPool.close();
-        }
     }
 }

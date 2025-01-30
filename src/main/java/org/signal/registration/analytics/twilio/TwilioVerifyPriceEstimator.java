@@ -7,10 +7,10 @@ package org.signal.registration.analytics.twilio;
 
 import com.twilio.type.InboundSmsPrice;
 import io.micronaut.context.annotation.Value;
+import io.micronaut.core.annotation.Nullable;
 import jakarta.inject.Singleton;
 import org.signal.registration.analytics.AttemptPendingAnalysis;
 import org.signal.registration.analytics.Money;
-import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.util.Currency;
 import java.util.List;

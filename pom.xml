@@ -14,21 +14,42 @@
   </parent>
 
   <properties>
-    <jdk.version>17</jdk.version>
-    <release.version>17</release.version>
+    <jdk.version>21</jdk.version>
+    <release.version>21</release.version>
     <exec.mainClass>org.signal.registration.Application</exec.mainClass>
     <firestore.emulator.version>489.0.0-emulators</firestore.emulator.version>
     <reactive.grpc.version>1.2.4</reactive.grpc.version>
     <testcontainers.version>1.20.4</testcontainers.version>
     <logback.version>1.4.14</logback.version>
+    <junit-jupiter.version>5.10.2</junit-jupiter.version>
+    <junit-platform.version>1.10.2</junit-platform.version>
 
     <!-- 17-jre (note: always use the multi-arch manifest *LIST* here) -->
     <docker.image.sha256>34bea064231cf397c4c9fed7f258761e8861fc5889dd3cbaf7477b3de82cf3ea</docker.image.sha256>
-    <protobuf.version>3.25.1</protobuf.version>
+    <protobuf.version>3.25.5</protobuf.version>
     <grpc.version>1.61.0</grpc.version>
   </properties>
 
   <repositories>
+    <repository>
+      <id>ossrh</id>
+      <name>OSSRH Snapshots</name>
+      <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>azure-maven</id>
+      <name>Azure Maven Repository</name>
+      <url>https://pkgs.dev.azure.com/azure-sdk/public/_packaging/azure-sdk-for-java/maven/v1</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
     <repository>
       <id>central</id>
       <url>https://repo.maven.apache.org/maven2</url>
@@ -353,6 +374,18 @@
       <version>6.0.11</version>
     </dependency>
 
+    <!-- Microsoft Entra ID Dependencies -->
+    <dependency>
+      <groupId>com.azure</groupId>
+      <artifactId>azure-identity</artifactId>
+      <version>1.11.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.microsoft.graph</groupId>
+      <artifactId>microsoft-graph</artifactId>
+      <version>5.74.0</version>
+    </dependency>
+
     <!-- Test dependencies -->
     <dependency>
       <groupId>com.google.cloud</groupId>
@@ -375,13 +408,50 @@
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>${junit-jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>${junit-jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
+      <version>${junit-jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-commons</artifactId>
+      <version>${junit-platform.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-engine</artifactId>
+      <version>${junit-platform.version}</version>
       <scope>test</scope>
     </dependency>
 
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
+      <version>5.11.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-junit-jupiter</artifactId>
+      <version>5.11.0</version>
       <scope>test</scope>
     </dependency>
 
@@ -447,6 +517,10 @@
           <source>${jdk.version}</source>
           <target>${jdk.version}</target>
           <encoding>UTF-8</encoding>
+          <enablePreview>true</enablePreview>
+          <compilerArgs>
+            <arg>--enable-preview</arg>
+          </compilerArgs>
           <annotationProcessorPaths>
             <path>
               <groupId>io.micronaut</groupId>
@@ -475,6 +549,10 @@
           <excludes>
             <exclude>**/Abstract*.java</exclude>
           </excludes>
+          <argLine>
+            --enable-preview
+            -XX:+EnableDynamicAgentLoading
+          </argLine>
         </configuration>
       </plugin>
 
@@ -483,15 +561,11 @@
         <groupId>org.xolstice.maven.plugins</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
         <version>0.6.1</version>
-
         <configuration>
-          <checkStaleness>false</checkStaleness>
-          <clearOutputDirectory>false</clearOutputDirectory>
-          <outputDirectory>${project.build.directory}/generated-sources/java</outputDirectory>
           <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
+          <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
           <pluginId>grpc</pluginId>
           <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
-
           <protocPlugins>
             <protocPlugin>
               <id>reactor-grpc</id>
@@ -502,7 +576,6 @@
             </protocPlugin>
           </protocPlugins>
         </configuration>
-
         <executions>
           <execution>
             <goals>
@@ -520,7 +593,7 @@
         <version>3.4.0</version>
         <configuration>
           <from>
-            <image>eclipse-temurin:17</image>
+            <image>eclipse-temurin:21</image>
           </from>
           <container>
             <mainClass>${exec.mainClass}</mainClass>

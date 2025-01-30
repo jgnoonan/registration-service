@@ -30,7 +30,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
+import io.micronaut.core.annotation.Nullable;
+import io.micronaut.context.annotation.Value;
 import org.apache.commons.lang3.StringUtils;
 import org.signal.registration.AuthenticationException;
 import org.signal.registration.ratelimit.RateLimitExceededException;
@@ -55,7 +56,6 @@ import org.signal.registration.util.CompletionExceptions;
 import org.signal.registration.util.MessageTransports;
 import org.signal.registration.util.UUIDUtil;
 import org.signal.registration.ldap.LdapService;
-import io.micronaut.context.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

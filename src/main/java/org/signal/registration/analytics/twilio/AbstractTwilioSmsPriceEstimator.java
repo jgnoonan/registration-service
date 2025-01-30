@@ -7,6 +7,7 @@ package org.signal.registration.analytics.twilio;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.twilio.type.InboundSmsPrice;
+import io.micronaut.core.annotation.Nullable;
 import io.micronaut.scheduling.annotation.Scheduled;
 import org.apache.commons.lang3.StringUtils;
 import org.signal.registration.analytics.AttemptPendingAnalysis;
@@ -15,7 +16,6 @@ import org.signal.registration.analytics.PriceEstimator;
 import org.signal.registration.rpc.MessageTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import javax.annotation.Nullable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
