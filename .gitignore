@@ -16,3 +16,4 @@ out/
 
 application-dev.yml
 .env
+target/
