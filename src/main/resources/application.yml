@@ -71,7 +71,7 @@ micronaut:
         enabled: true
         tenant-id: "2f8b8c95-8509-4822-a393-dc8f12d2c829"
         client-id: "bcd5ed86-07a1-4528-9c44-32e86b3e79ee"
-        client-secret: "Vto8Q~ivKwKgCm85h3aE.a0t_IFlnAvXO2tQIahj"  # Fixed the secret value
+        client-secret: ${ENTRA_CLIENT_SECRET}
         test-user: "jgnoonan_comcast.net#EXT#@jgnoonancomcast.onmicrosoft.com"
         test-password: "6MaDVWPMR9pAkWreWkvN7LtRD"
 
