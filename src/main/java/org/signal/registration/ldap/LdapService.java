@@ -29,6 +29,7 @@ public class LdapService implements DirectoryService {
     private static final Logger LOG = LoggerFactory.getLogger(LdapService.class);
     private final LdapConfiguration ldapConfiguration;
     private LDAPConnectionPool connectionPool;
+    private boolean initialized = false;
 
     /**
      * Constructs a new LdapService with the specified configuration.
@@ -46,6 +47,11 @@ public class LdapService implements DirectoryService {
      */
     @Override
     public void initialize() throws LDAPException {
+        if (initialized) {
+            LOG.debug("LDAP service already initialized");
+            return;
+        }
+
         LOG.info("Initializing LDAP service with configuration: url={}, baseDn={}, useSSL={}", 
             ldapConfiguration.getUrl(), ldapConfiguration.getBaseDn(), ldapConfiguration.isUseSsl());
         
@@ -62,6 +68,8 @@ public class LdapService implements DirectoryService {
             LOG.info("Successfully initialized LDAP connection pool: minSize={}, maxSize={}, timeout={}ms",
                 ldapConfiguration.getMinPoolSize(), ldapConfiguration.getMaxPoolSize(), 
                 ldapConfiguration.getPoolTimeout());
+            
+            initialized = true;
         } catch (LDAPException e) {
             LOG.error("Failed to initialize LDAP connection pool: {}", e.getMessage(), e);
             throw e;
@@ -79,6 +87,15 @@ public class LdapService implements DirectoryService {
      */
     @Override
     public Optional<String> authenticateAndGetPhoneNumber(String userId, String password) {
+        if (!initialized) {
+            try {
+                initialize();
+            } catch (LDAPException e) {
+                LOG.error("Failed to initialize LDAP service during authentication", e);
+                return Optional.empty();
+            }
+        }
+
         try {
             return findPhoneNumber(connectionPool.getConnection(), userId);
         } catch (LDAPException e) {
@@ -100,40 +117,33 @@ public class LdapService implements DirectoryService {
             LOG.debug("Username is null or empty");
             return Optional.empty();
         }
-        
-        String filter = String.format("(|(uid=%s)(mail=%s))", username, username);
-        LOG.debug("Searching for phone number with filter: {} and attribute: {} in baseDn: {}", 
-            filter, ldapConfiguration.getPhoneNumberAttribute(), ldapConfiguration.getBaseDn());
-        
-        SearchResultEntry entry = connection.searchForEntry(
+
+        String filter = ldapConfiguration.getUserFilter().replace("{0}", username);
+        SearchRequest searchRequest = new SearchRequest(
             ldapConfiguration.getBaseDn(),
             SearchScope.SUB,
             filter,
             ldapConfiguration.getPhoneNumberAttribute()
         );
-        
-        if (entry == null) {
-            LOG.debug("No entry found when searching for phone number for user: {}", username);
+
+        SearchResult result = connection.search(searchRequest);
+        if (result.getEntryCount() == 0) {
+            LOG.debug("No user found with username: {}", username);
             return Optional.empty();
         }
-        
+
+        SearchResultEntry entry = result.getSearchEntries().get(0);
         String phoneNumber = entry.getAttributeValue(ldapConfiguration.getPhoneNumberAttribute());
-        if (phoneNumber == null) {
-            LOG.debug("No phone number found for user: {}", username);
-            return Optional.empty();
-        }
-        
-        LOG.debug("Found phone number for user {}: {}", username, phoneNumber);
-        return Optional.of(phoneNumber);
+        return Optional.ofNullable(phoneNumber);
     }
 
     /**
      * Closes the LDAP connection pool.
      */
-    @Override
     public void cleanup() {
         if (connectionPool != null) {
             connectionPool.close();
+            initialized = false;
         }
     }
 

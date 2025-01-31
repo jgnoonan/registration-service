@@ -488,6 +488,12 @@
     </dependency>
 
     <dependency>
+      <groupId>commons-validator</groupId>
+      <artifactId>commons-validator</artifactId>
+      <version>1.8.0</version>
+    </dependency>
+
+    <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>gcloud</artifactId>
       <scope>test</scope>

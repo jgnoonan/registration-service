@@ -17,6 +17,12 @@ public class LdapConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(LdapConfiguration.class);
 
     /**
+     * Whether LDAP integration is enabled
+     */
+    @Value("${micronaut.config.registration.ldap.enabled:false}")
+    private boolean enabled;
+
+    /**
      * The LDAP server URL in the format ldap(s)://hostname:port
      */
     @Value("${micronaut.config.registration.ldap.url}")
@@ -424,5 +430,21 @@ public class LdapConfiguration {
     public void setPhoneNumberAttribute(String phoneNumberAttribute) {
         LOG.debug("Setting LDAP phone number attribute: {}", phoneNumberAttribute);
         this.phoneNumberAttribute = phoneNumberAttribute;
+    }
+
+    /**
+     * Returns whether LDAP integration is enabled.
+     * @return whether LDAP integration is enabled
+     */
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    /**
+     * Sets whether LDAP integration is enabled.
+     * @param enabled whether LDAP integration is enabled
+     */
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 }

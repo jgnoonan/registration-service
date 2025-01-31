@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Optional;
 
@@ -24,7 +25,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class EntraIdConnectionTest {
     private static final Logger logger = LoggerFactory.getLogger(EntraIdConnectionTest.class);
     
-    private static final String TEST_USER_EMAIL = "test.user@signal.org";
+    private static final String TEST_USER_EMAIL = "jgnoonan@comcast.net";
+    private static final String TEST_USER_PASSWORD = System.getenv("ENTRA_TEST_USER_PASSWORD");
     
     private EntraIdDirectoryService directoryService;
     private EntraIdConfiguration config;
@@ -35,17 +37,12 @@ class EntraIdConnectionTest {
         config = new EntraIdConfiguration();
         config.setEnabled(true);
         
-        String tenantId = System.getenv("ENTRA_TENANT_ID");
-        String clientId = System.getenv("ENTRA_CLIENT_ID");
+        // Use the correct tenant ID and client ID
+        String tenantId = "2f8b8c95-8509-4822-a393-dc8f12d2c829";
+        String clientId = "bcd5ed86-07a1-4528-9c44-32e86b3e79ee";
         String clientSecret = System.getenv("ENTRA_CLIENT_SECRET");
-        String testUserPassword = System.getenv("ENTRA_TEST_USER_PASSWORD");
         
         // Check for placeholder values
-        if (tenantId != null && tenantId.equals("your-tenant-id")) {
-            logger.warn("ENTRA_TENANT_ID contains placeholder value. Please set actual tenant ID.");
-            config.setEnabled(false);
-            return;
-        }
         if (clientId != null && clientId.equals("your-client-id")) {
             logger.warn("ENTRA_CLIENT_ID contains placeholder value. Please set actual client ID.");
             config.setEnabled(false);
@@ -56,19 +53,12 @@ class EntraIdConnectionTest {
             config.setEnabled(false);
             return;
         }
-        if (testUserPassword == null) {
-            logger.warn("ENTRA_TEST_USER_PASSWORD not set. Authentication tests will be skipped.");
-            config.setEnabled(false);
-            return;
-        }
         
         // If any required environment variables are missing, disable the service
-        if (tenantId == null || clientId == null || clientSecret == null) {
+        if (clientId == null || clientSecret == null) {
             logger.warn("Missing required environment variables for Entra ID tests. Please set:\n" +
-                       "  ENTRA_TENANT_ID\n" +
                        "  ENTRA_CLIENT_ID\n" +
-                       "  ENTRA_CLIENT_SECRET\n" +
-                       "  ENTRA_TEST_USER_PASSWORD");
+                       "  ENTRA_CLIENT_SECRET");
             config.setEnabled(false);
             return;
         }
@@ -89,15 +79,13 @@ class EntraIdConnectionTest {
 
     @Test
     @DisplayName("Test authenticating with valid credentials")
-    @EnabledIfEnvironmentVariable(named = "ENTRA_TENANT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_SECRET", matches = ".+")
-    @EnabledIfEnvironmentVariable(named = "ENTRA_TEST_USER_PASSWORD", matches = ".+")
     void testAuthenticateWithValidCredentials() {
         assumeTrue(config.isEnabled(), "Entra ID integration is not enabled. Please check environment variables.");
 
-        final String testUserEmail = "jgnoonan@comcast.net";  // Test with jgnoonan's email
-        final String testUserPassword = System.getenv("ENTRA_TEST_USER_PASSWORD");
+        final String testUserEmail = TEST_USER_EMAIL;
+        final String testUserPassword = TEST_USER_PASSWORD;
 
         final Optional<String> phoneNumber = directoryService.authenticateAndGetPhoneNumber(testUserEmail, testUserPassword);
         assertTrue(phoneNumber.isPresent(), "Should get a phone number for valid credentials");
@@ -105,17 +93,14 @@ class EntraIdConnectionTest {
 
     @Test
     @DisplayName("Test successful authentication and phone number retrieval")
-    @EnabledIfEnvironmentVariable(named = "ENTRA_TENANT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_SECRET", matches = ".+")
-    @EnabledIfEnvironmentVariable(named = "ENTRA_TEST_USER_PASSWORD", matches = ".+")
     void testAuthenticateAndGetPhoneNumber() {
         assumeTrue(config.isEnabled(), "Entra ID integration is not enabled. Please check environment variables.");
         
-        String testUserPassword = System.getenv("ENTRA_TEST_USER_PASSWORD");
         Optional<String> phoneNumber = directoryService.authenticateAndGetPhoneNumber(
             TEST_USER_EMAIL,
-            testUserPassword
+            TEST_USER_PASSWORD
         );
         
         assertTrue(phoneNumber.isPresent(), "Phone number should be retrieved successfully");
@@ -131,11 +116,12 @@ class EntraIdConnectionTest {
     void testInvalidCredentials() {
         assumeTrue(config.isEnabled(), "Entra ID integration is not enabled. Please check environment variables.");
         
+        // Test with invalid password - should return empty Optional
         Optional<String> result = directoryService.authenticateAndGetPhoneNumber(
             TEST_USER_EMAIL,
             "wrongpassword"
         );
-        assertFalse(result.isPresent(), "Should not authenticate with invalid credentials");
+        assertFalse(result.isPresent(), "Authentication should fail with invalid password");
     }
 
     @ParameterizedTest
@@ -150,7 +136,7 @@ class EntraIdConnectionTest {
     void testInvalidEmailFormats(String invalidEmail) {
         assumeTrue(config.isEnabled(), "Entra ID integration is not enabled. Please check environment variables.");
         
-        String testUserPassword = System.getenv("ENTRA_TEST_USER_PASSWORD");
+        String testUserPassword = TEST_USER_PASSWORD;
         Optional<String> result = directoryService.authenticateAndGetPhoneNumber(
             invalidEmail,
             testUserPassword
@@ -176,7 +162,7 @@ class EntraIdConnectionTest {
         directoryService.cleanup();
         
         // Verify service is disabled after cleanup
-        String testUserPassword = System.getenv("ENTRA_TEST_USER_PASSWORD");
+        String testUserPassword = TEST_USER_PASSWORD;
         Optional<String> result = directoryService.authenticateAndGetPhoneNumber(
             TEST_USER_EMAIL,
             testUserPassword
@@ -193,7 +179,6 @@ class EntraIdConnectionTest {
 
     @Test
     @DisplayName("Test connection to Microsoft Graph")
-    @EnabledIfEnvironmentVariable(named = "ENTRA_TENANT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_SECRET", matches = ".+")
     void testConnection() {
@@ -201,7 +186,7 @@ class EntraIdConnectionTest {
         
         // Create the credential
         final ClientSecretCredential credential = new ClientSecretCredentialBuilder()
-                .tenantId(System.getenv("ENTRA_TENANT_ID"))
+                .tenantId("2f8b8c95-8509-4822-a393-dc8f12d2c829")
                 .clientId(System.getenv("ENTRA_CLIENT_ID"))
                 .clientSecret(System.getenv("ENTRA_CLIENT_SECRET"))
                 .build();
@@ -234,7 +219,6 @@ class EntraIdConnectionTest {
 
     @Test
     @DisplayName("Test listing users in tenant")
-    @EnabledIfEnvironmentVariable(named = "ENTRA_TENANT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_ID", matches = ".+")
     @EnabledIfEnvironmentVariable(named = "ENTRA_CLIENT_SECRET", matches = ".+")
     void testListUsers() {
@@ -242,7 +226,7 @@ class EntraIdConnectionTest {
         
         // Create the credential
         final ClientSecretCredential credential = new ClientSecretCredentialBuilder()
-                .tenantId(System.getenv("ENTRA_TENANT_ID"))
+                .tenantId("2f8b8c95-8509-4822-a393-dc8f12d2c829")
                 .clientId(System.getenv("ENTRA_CLIENT_ID"))
                 .clientSecret(System.getenv("ENTRA_CLIENT_SECRET"))
                 .build();

@@ -17,11 +17,11 @@ micronaut:
       environments: true
       config:
         registration:
-          useLdap: true
+          useLdap: false
     production:
       config:
         registration:
-          useLdap: true
+          useLdap: false
   executors:
     scheduled:
       type: scheduled
@@ -44,14 +44,14 @@ micronaut:
     registration:
       # Directory service type configuration
       directory:
-        type: ENTRA_ID  # Can be LDAP or ENTRA_ID
+        type: ENTRA_ID
 
       # LDAP Configuration
       ldap:
-        # LDAP server connection settings
-        url: ldap://localhost:389
-        baseDn: dc=valuelabs,dc=com
-        useSsl: false
+        enabled: false
+        url: ldaps://2f8b8c95-8509-4822-a393-dc8f12d2c829.onmicrosoft.com:636
+        baseDn: DC=comcast,DC=net
+        useSsl: true
         trustStore: /Users/jgnoonan/registration-service/src/main/resources/certs/truststore.jks
         trustStorePassword: changeit
         trustStoreType: JKS
@@ -62,22 +62,23 @@ micronaut:
         maxPoolSize: 10
         poolTimeout: 300000
         maxRetries: 3
-        userFilter: (uid={0})
-        bindDn: cn=admin,dc=valuelabs,dc=com
-        bindPassword: Rat3onal
+        userFilter: (userPrincipalName={0})
+        bindDn: ${ENTRA_CLIENT_ID}@comcast.net
+        bindPassword: ${ENTRA_CLIENT_SECRET}
         phoneNumberAttribute: mobile
 
-      # Microsoft Entra ID Configuration (formerly Azure AD)
       entra-id:
         enabled: true
         tenant-id: "2f8b8c95-8509-4822-a393-dc8f12d2c829"
-        client-id: "a7106d81-6dc4-42bf-bcf9-21666789ea05"
-        # Use either client-secret or certificate-path, not both
-        client-secret: ${ENTRA_CLIENT_SECRET}
+        client-id: "bcd5ed86-07a1-4528-9c44-32e86b3e79ee"
+        client-secret: "Vto8Q~ivKwKgCm85h3aE.a0t_IFlnAvXO2tQIahj"  # Fixed the secret value
+        test-user: "jgnoonan_comcast.net#EXT#@jgnoonancomcast.onmicrosoft.com"
+        test-password: "6MaDVWPMR9pAkWreWkvN7LtRD"
+
         # certificate-path: "${ENTRA_CERTIFICATE_PATH}"  # Alternative to client secret
 
 messagebird:
-  enabled: false
+   enabled: false
 
 bigtable:
   enabled: false
@@ -100,6 +101,8 @@ selection:
     fallbackSenders: ["last-digits-of-phone-number"]
     defaultWeights:
       last-digits-of-phone-number: 100
+    regionWeights: {}
+    regionOverrides: {}
 
 grpc:
   server:

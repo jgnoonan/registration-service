@@ -56,6 +56,8 @@ import org.signal.registration.util.CompletionExceptions;
 import org.signal.registration.util.MessageTransports;
 import org.signal.registration.util.UUIDUtil;
 import org.signal.registration.ldap.LdapService;
+import org.signal.registration.directory.DirectoryService;
+import org.signal.registration.directory.DirectoryServiceFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +74,8 @@ public class RegistrationService {
   private final Clock clock;
   private final Map<String, VerificationCodeSender> sendersByName;
   private final LdapService ldapService;
+  private final DirectoryServiceFactory directoryServiceFactory;
+  private DirectoryService directoryService;
   private final boolean useLdap;
 
   @VisibleForTesting
@@ -91,7 +95,8 @@ public class RegistrationService {
                            final List<VerificationCodeSender> verificationCodeSenders,
                            final Clock clock,
                            final LdapService ldapService,
-                           @Value("${micronaut.config.registration.useLdap:true}") final boolean useLdapEnabled) {
+                           final DirectoryServiceFactory directoryServiceFactory,
+                           @Value("${micronaut.environments.development.config.registration.useLdap:false}") final boolean useLdapEnabled) {
 
     this.senderSelectionStrategy = senderSelectionStrategy;
     this.sessionRepository = sessionRepository;
@@ -101,6 +106,7 @@ public class RegistrationService {
     this.checkVerificationCodeRateLimiter = checkVerificationCodeRateLimiter;
     this.clock = clock;
     this.ldapService = ldapService;
+    this.directoryServiceFactory = directoryServiceFactory;
     this.useLdap = useLdapEnabled;
 
     this.sendersByName = verificationCodeSenders.stream()
@@ -119,7 +125,15 @@ public class RegistrationService {
         throw new RuntimeException("Failed to initialize LDAP service", e);
       }
     } else {
-      LOG.info("LDAP integration is disabled");
+      LOG.info("LDAP integration is disabled - initializing Entra ID service");
+      try {
+        directoryService = directoryServiceFactory.createDirectoryService();
+        directoryService.initialize();
+        LOG.info("Directory service successfully initialized");
+      } catch (Exception e) {
+        LOG.error("Critical failure: Unable to initialize directory service: {}", e.getMessage(), e);
+        throw new RuntimeException("Failed to initialize directory service", e);
+      }
     }
   }
 

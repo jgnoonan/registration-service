@@ -1,27 +1,19 @@
 package org.signal.registration.directory.entra;
 
 import io.micronaut.context.annotation.ConfigurationProperties;
-import io.micronaut.context.annotation.Value;
 
 /**
  * Configuration properties for Microsoft Entra ID integration (formerly Azure AD)
  */
 @ConfigurationProperties("micronaut.config.registration.entra-id")
 public class EntraIdConfiguration {
-    @Value("${micronaut.config.registration.entra-id.enabled:false}")
-    private boolean enabled;
-
-    @Value("${micronaut.config.registration.entra-id.tenant-id:#{null}}")
+    private boolean enabled = false;
     private String tenantId;
-
-    @Value("${micronaut.config.registration.entra-id.client-id:#{null}}")
     private String clientId;
-
-    @Value("${micronaut.config.registration.entra-id.client-secret:#{null}}")
     private String clientSecret;
-
-    @Value("${micronaut.config.registration.entra-id.certificate-path:#{null}}")
     private String certificatePath;
+    private String testUser;
+    private String testPassword;
 
     public boolean isEnabled() {
         return enabled;
@@ -61,5 +53,21 @@ public class EntraIdConfiguration {
 
     public void setCertificatePath(String certificatePath) {
         this.certificatePath = certificatePath;
+    }
+
+    public String getTestUser() {
+        return testUser;
+    }
+
+    public void setTestUser(String testUser) {
+        this.testUser = testUser;
+    }
+
+    public String getTestPassword() {
+        return testPassword;
+    }
+
+    public void setTestPassword(String testPassword) {
+        this.testPassword = testPassword;
     }
 }
