@@ -105,51 +105,28 @@ public class EntraIdDirectoryService implements DirectoryService {
         }
 
         try {
-            // For guest users (containing #EXT#), use their original email address for authentication
-            String authEmail = userId;
-            String authority = "https://login.microsoftonline.com/";
-            String tenantId = config.getTenantId();
-            
-            if (userId.contains("#EXT#")) {
-                // Convert "user_domain.com#EXT#@tenant.onmicrosoft.com" to "user@domain.com"
-                String[] parts = userId.split("#EXT#");
-                if (parts.length > 0) {
-                    authEmail = parts[0].replace("_", "@");
-                }
-                logger.info("Guest user detected, using original email: {}", authEmail);
-            }
-            
-            logger.info("Authenticating user with email: {} using tenant: {}", authEmail, tenantId);
-            
-            // Use the common endpoint for authentication
-            String authorityUrl = "https://login.microsoftonline.com/common";
-            
-            // Create a public client application for interactive authentication
+            // Authenticate using ROPC flow
             PublicClientApplication pca = PublicClientApplication.builder(config.getClientId())
-                .authority(authorityUrl)
-                .validateAuthority(false)  // Disable authority validation for external users
+                .authority("https://login.microsoftonline.com/" + config.getTenantId())
                 .build();
 
-            // Set up the parameters for username/password authentication
-            Set<String> scopes = new HashSet<>();
-            scopes.add("https://graph.microsoft.com/.default");
-
-            UserNamePasswordParameters parameters = UserNamePasswordParameters.builder(
-                scopes,
-                authEmail,
-                password.toCharArray()
-            ).build();
+            // Set up the parameters for the token request
+            UserNamePasswordParameters parameters = UserNamePasswordParameters
+                .builder(Collections.singleton("https://graph.microsoft.com/.default"), 
+                    userId, 
+                    password.toCharArray())
+                .build();
 
             // Acquire token
             CompletableFuture<IAuthenticationResult> future = pca.acquireToken(parameters);
             try {
                 IAuthenticationResult result = future.get(30, TimeUnit.SECONDS);  // Add timeout
                 if (result == null || result.accessToken() == null) {
-                    logger.info("Failed to get access token for user: {}", authEmail);
+                    logger.info("Failed to get access token for user: {}", userId);
                     return Optional.empty();
                 }
             } catch (Exception e) {
-                logger.info("Failed to validate password for user: {}", authEmail);
+                logger.info("Failed to validate password for user: {}", userId);
                 return Optional.empty();
             }
 
@@ -163,24 +140,27 @@ public class EntraIdDirectoryService implements DirectoryService {
                 .getCurrentPage();
 
             if (users == null || users.isEmpty()) {
-                logger.error("No user found with email: {}", userId);
+                logger.info("No user found with email: {}", userId);
                 return Optional.empty();
             }
 
             User user = users.get(0);
-            logger.info("Found user: displayName={}, userPrincipalName={}, mail={}", 
-                user.displayName, user.userPrincipalName, user.mail);
+            logger.info("Found user: displayName={}, userPrincipalName={}, mail={}", user.displayName, user.userPrincipalName, user.mail);
 
-            if (user.mobilePhone != null) {
-                logger.info("Found mobile phone number for user");
-                return Optional.of(normalizePhoneNumber(user.mobilePhone));
+            // Try mobilePhone first, then businessPhones
+            String phoneNumber = null;
+            if (user.mobilePhone != null && !user.mobilePhone.isEmpty()) {
+                phoneNumber = user.mobilePhone;
             } else if (user.businessPhones != null && !user.businessPhones.isEmpty()) {
-                logger.info("Found business phone number for user");
-                return Optional.of(normalizePhoneNumber(user.businessPhones.get(0)));
+                phoneNumber = user.businessPhones.get(0);
             }
-            
-            logger.error("No phone number found for user: {}", userId);
-            return Optional.empty();
+
+            if (phoneNumber == null) {
+                logger.info("No phone number found for user: {}", userId);
+                return Optional.empty();
+            }
+
+            return Optional.of(normalizePhoneNumber(phoneNumber));
 
         } catch (Exception e) {
             logger.error("Failed to authenticate user: {}", userId, e);

@@ -26,7 +26,8 @@ class EntraIdConnectionTest {
     private static final Logger logger = LoggerFactory.getLogger(EntraIdConnectionTest.class);
     
     private static final String TEST_USER_EMAIL = "jgnoonan@comcast.net";
-    private static final String TEST_USER_PASSWORD = System.getenv("ENTRA_TEST_USER_PASSWORD");
+    private static final String TEST_USER_UPN = "jgnoonan_comcast.net#EXT#@jgnoonancomcast.onmicrosoft.com";
+    private static final String TEST_USER_PASSWORD = System.getenv("ENTRA_TEST_PASSWORD");
     
     private EntraIdDirectoryService directoryService;
     private EntraIdConfiguration config;

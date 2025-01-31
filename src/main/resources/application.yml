@@ -69,11 +69,11 @@ micronaut:
 
       entra-id:
         enabled: true
-        tenant-id: "2f8b8c95-8509-4822-a393-dc8f12d2c829"
-        client-id: "bcd5ed86-07a1-4528-9c44-32e86b3e79ee"
+        tenant-id: 2f8b8c95-8509-4822-a393-dc8f12d2c829
+        client-id: bcd5ed86-07a1-4528-9c44-32e86b3e79ee
         client-secret: ${ENTRA_CLIENT_SECRET}
-        test-user: "jgnoonan_comcast.net#EXT#@jgnoonancomcast.onmicrosoft.com"
-        test-password: ""
+        test-user: jgnoonan@comcast.net
+        test-password: ${ENTRA_TEST_PASSWORD}
 
         # certificate-path: "${ENTRA_CERTIFICATE_PATH}"  # Alternative to client secret
 
