@@ -73,7 +73,7 @@ micronaut:
         client-id: "bcd5ed86-07a1-4528-9c44-32e86b3e79ee"
         client-secret: ${ENTRA_CLIENT_SECRET}
         test-user: "jgnoonan_comcast.net#EXT#@jgnoonancomcast.onmicrosoft.com"
-        test-password: "6MaDVWPMR9pAkWreWkvN7LtRD"
+        test-password: ""
 
         # certificate-path: "${ENTRA_CERTIFICATE_PATH}"  # Alternative to client secret
 
