@@ -13,7 +13,6 @@ import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
 import com.microsoft.graph.models.User;
 import com.microsoft.graph.requests.GraphServiceClient;
 import com.microsoft.graph.requests.UserCollectionPage;
-import io.micronaut.context.annotation.Context;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
 import okhttp3.Request;
@@ -51,13 +50,12 @@ public class EntraIdDirectoryService implements DirectoryService {
 
     @PostConstruct
     public void initialize() {
-        if (!config.isEnabled()) {
-            logger.info("Microsoft Entra ID integration is disabled");
-            return;
-        }
-
         try {
+            logger.info("Initializing Microsoft Entra ID service with configuration: tenantId={}, clientId={}", 
+                config.getTenantId(), config.getClientId());
+
             // Create the credential for accessing Microsoft Graph API
+            logger.debug("Creating client credentials for Microsoft Graph API");
             final TokenCredential credential = new ClientSecretCredentialBuilder()
                 .authorityHost("https://login.microsoftonline.com")
                 .tenantId(config.getTenantId())
@@ -66,36 +64,38 @@ public class EntraIdDirectoryService implements DirectoryService {
                 .build();
 
             // Create an auth provider for Microsoft Graph
+            logger.debug("Creating token credential auth provider");
             final TokenCredentialAuthProvider authProvider = new TokenCredentialAuthProvider(
                 Collections.singletonList(GRAPH_DEFAULT_SCOPE), credential);
 
             // Initialize Microsoft Graph client
+            logger.debug("Building Microsoft Graph client");
             graphClient = GraphServiceClient.builder()
                 .authenticationProvider(authProvider)
                 .buildClient();
 
             // Test the connection by making a simple request
-            logger.info("Testing connection to Microsoft Entra ID");
+            logger.info("Testing connection to Microsoft Entra ID by retrieving top user");
             graphClient.users().buildRequest().top(1).get();
             logger.info("Successfully tested connection to Microsoft Entra ID");
 
             initialized = true;
             logger.info("Microsoft Entra ID directory service initialized successfully");
         } catch (Exception e) {
-            logger.error("Failed to initialize Microsoft Entra ID directory service", e);
+            logger.error("Failed to initialize Microsoft Entra ID directory service: {}", e.getMessage(), e);
             throw e;
         }
     }
 
     @Override
     public Optional<String> authenticateAndGetPhoneNumber(String userId, String password) {
-        if (!config.isEnabled() || !initialized) {
-            logger.error("Microsoft Entra ID directory service is not enabled or not initialized");
+        if (!initialized) {
+            logger.error("Microsoft Entra ID directory service is not initialized");
             return Optional.empty();
         }
 
         if (userId == null || password == null || userId.trim().isEmpty() || password.trim().isEmpty()) {
-            logger.error("Invalid email format provided: {}", userId);
+            logger.error("Invalid credentials: userId or password is null or empty");
             return Optional.empty();
         }
 
@@ -105,12 +105,13 @@ public class EntraIdDirectoryService implements DirectoryService {
         }
 
         try {
-            // Authenticate using ROPC flow
+            logger.debug("Creating PublicClientApplication for user authentication");
             PublicClientApplication pca = PublicClientApplication.builder(config.getClientId())
                 .authority("https://login.microsoftonline.com/" + config.getTenantId())
                 .build();
 
             // Set up the parameters for the token request
+            logger.debug("Setting up ROPC flow parameters for user: {}", userId);
             UserNamePasswordParameters parameters = UserNamePasswordParameters
                 .builder(Collections.singleton("https://graph.microsoft.com/.default"), 
                     userId, 
@@ -118,6 +119,7 @@ public class EntraIdDirectoryService implements DirectoryService {
                 .build();
 
             // Acquire token
+            logger.info("Attempting to acquire token for user: {}", userId);
             CompletableFuture<IAuthenticationResult> future = pca.acquireToken(parameters);
             try {
                 IAuthenticationResult result = future.get(30, TimeUnit.SECONDS);  // Add timeout
@@ -125,17 +127,23 @@ public class EntraIdDirectoryService implements DirectoryService {
                     logger.info("Failed to get access token for user: {}", userId);
                     return Optional.empty();
                 }
+                logger.debug("Successfully acquired token for user: {}", userId);
             } catch (Exception e) {
                 logger.info("Failed to validate password for user: {}", userId);
+                if (e instanceof MsalServiceException) {
+                    logger.debug("MSAL error details: {}", ((MsalServiceException) e).getMessage());
+                }
                 return Optional.empty();
             }
 
             // If we got here, the password is valid. Now search for the user using their email
-            logger.info("Searching for user with filter: mail eq '{}' or userPrincipalName eq '{}'", userId, userId);
+            String filter = "mail eq '" + userId + "' or userPrincipalName eq '" + userId + "'";
+            logger.info("Searching for user with filter: {}", filter);
+            
             List<User> users = graphClient.users()
                 .buildRequest()
-                .filter("mail eq '" + userId + "' or userPrincipalName eq '" + userId + "'")
-                .select("displayName,mobilePhone,businessPhones,userPrincipalName,mail")
+                .filter(filter)
+                .select("displayName," + config.getPhoneNumberAttribute() + ",businessPhones,userPrincipalName,mail")
                 .get()
                 .getCurrentPage();
 
@@ -145,13 +153,39 @@ public class EntraIdDirectoryService implements DirectoryService {
             }
 
             User user = users.get(0);
-            logger.info("Found user: displayName={}, userPrincipalName={}, mail={}", user.displayName, user.userPrincipalName, user.mail);
+            logger.info("Found user: displayName={}, userPrincipalName={}, mail={}", 
+                user.displayName, user.userPrincipalName, user.mail);
 
-            // Try mobilePhone first, then businessPhones
+            // Try configured phoneNumberAttribute first, then businessPhones as fallback
             String phoneNumber = null;
-            if (user.mobilePhone != null && !user.mobilePhone.isEmpty()) {
-                phoneNumber = user.mobilePhone;
-            } else if (user.businessPhones != null && !user.businessPhones.isEmpty()) {
+            
+            // Use reflection to get the configured phone number attribute
+            try {
+                java.lang.reflect.Method getter = User.class.getMethod("get" + 
+                    config.getPhoneNumberAttribute().substring(0, 1).toUpperCase() + 
+                    config.getPhoneNumberAttribute().substring(1));
+                Object value = getter.invoke(user);
+                if (value != null) {
+                    if (value instanceof String) {
+                        phoneNumber = (String) value;
+                        logger.debug("Using {}: {}", config.getPhoneNumberAttribute(), phoneNumber);
+                    } else if (value instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<String> phones = (List<String>) value;
+                        if (!phones.isEmpty()) {
+                            phoneNumber = phones.get(0);
+                            logger.debug("Using first {} from list: {}", config.getPhoneNumberAttribute(), phoneNumber);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to get configured phone attribute '{}': {}", 
+                    config.getPhoneNumberAttribute(), e.getMessage());
+            }
+
+            // Fallback to businessPhones if configured attribute not found
+            if (phoneNumber == null && user.businessPhones != null && !user.businessPhones.isEmpty()) {
+                logger.debug("Using first businessPhone as fallback: {}", user.businessPhones.get(0));
                 phoneNumber = user.businessPhones.get(0);
             }
 
@@ -160,10 +194,13 @@ public class EntraIdDirectoryService implements DirectoryService {
                 return Optional.empty();
             }
 
-            return Optional.of(normalizePhoneNumber(phoneNumber));
+            String normalizedNumber = normalizePhoneNumber(phoneNumber);
+            logger.info("Successfully retrieved and normalized phone number for user: {} -> {}", 
+                userId, normalizedNumber);
+            return Optional.of(normalizedNumber);
 
         } catch (Exception e) {
-            logger.error("Failed to authenticate user: {}", userId, e);
+            logger.error("Failed to authenticate user: {} - Error: {}", userId, e.getMessage(), e);
             return Optional.empty();
         }
     }
@@ -213,7 +250,6 @@ public class EntraIdDirectoryService implements DirectoryService {
             logger.info("Cleaning up Microsoft Entra ID directory service");
             graphClient = null;
             initialized = false;
-            config.setEnabled(false);  // Disable the service after cleanup
         }
     }
 }

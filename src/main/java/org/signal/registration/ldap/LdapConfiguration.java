@@ -12,122 +12,116 @@ import org.slf4j.LoggerFactory;
  * authentication, SSL/TLS settings, and connection pooling parameters.
  */
 @Singleton
-@ConfigurationProperties("micronaut.config.registration.ldap")
+@ConfigurationProperties("micronaut.config.registration.directory.ldap")
 public class LdapConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(LdapConfiguration.class);
 
     /**
-     * Whether LDAP integration is enabled
-     */
-    @Value("${micronaut.config.registration.ldap.enabled:false}")
-    private boolean enabled;
-
-    /**
      * The LDAP server URL in the format ldap(s)://hostname:port
      */
-    @Value("${micronaut.config.registration.ldap.url}")
+    @Value("${micronaut.config.registration.directory.ldap.url}")
     private String url;
 
     /**
      * The base DN for LDAP searches
      */
-    @Value("${micronaut.config.registration.ldap.baseDn}")
+    @Value("${micronaut.config.registration.directory.ldap.baseDn}")
     private String baseDn;
 
     /**
      * The filter used to search for users, {0} is replaced with the username
      */
-    @Value("${micronaut.config.registration.ldap.userFilter:(uid={0})}")
+    @Value("${micronaut.config.registration.directory.ldap.userFilter:(uid={0})}")
     private String userFilter;
 
     /**
      * The DN used to bind to the LDAP server for searches
      */
-    @Value("${micronaut.config.registration.ldap.bindDn:}")
+    @Value("${micronaut.config.registration.directory.ldap.bindDn:}")
     private String bindDn;
 
     /**
      * The password used to bind to the LDAP server for searches
      */
-    @Value("${micronaut.config.registration.ldap.bindPassword:}")
+    @Value("${micronaut.config.registration.directory.ldap.bindPassword:}")
     private String bindPassword;
 
     /**
      * The LDAP attribute that contains the user's phone number
      */
-    @Value("${micronaut.config.registration.ldap.phoneNumberAttribute:mobile}")
+    @Value("${micronaut.config.registration.directory.ldap.phoneNumberAttribute:mobile}")
     private String phoneNumberAttribute;
 
     /**
      * The LDAP server port (default: 636 for LDAPS)
      */
-    @Value("${micronaut.config.registration.ldap.port:636}")
+    @Value("${micronaut.config.registration.directory.ldap.port:636}")
     private int port;
 
     /**
      * Whether to use SSL/TLS for LDAP connections
      */
-    @Value("${micronaut.config.registration.ldap.useSsl:true}")
+    @Value("${micronaut.config.registration.directory.ldap.useSsl:false}")
     private boolean useSsl;
 
     /**
      * Path to the truststore file containing trusted certificates
      */
-    @Value("${micronaut.config.registration.ldap.trustStore:}")
+    @Value("${micronaut.config.registration.directory.ldap.trustStore:}")
     private String trustStore;
 
     /**
      * Password for the truststore
      */
-    @Value("${micronaut.config.registration.ldap.trustStorePassword:}")
+    @Value("${micronaut.config.registration.directory.ldap.trustStorePassword:}")
     private String trustStorePassword;
 
     /**
      * Type of truststore (default: JKS)
      */
-    @Value("${micronaut.config.registration.ldap.trustStoreType:JKS}")
+    @Value("${micronaut.config.registration.directory.ldap.trustStoreType:JKS}")
     private String trustStoreType;
 
     /**
      * Whether to verify the LDAP server's hostname against its certificate
      */
-    @Value("${micronaut.config.registration.ldap.hostnameVerification:true}")
+    @Value("${micronaut.config.registration.directory.ldap.hostnameVerification:true}")
     private boolean hostnameVerification;
 
     /**
      * Connection timeout in milliseconds
      */
-    @Value("${micronaut.config.registration.ldap.connectionTimeout:5000}")
+    @Value("${micronaut.config.registration.directory.ldap.connectionTimeout:5000}")
     private int connectionTimeout;
 
     /**
      * Read timeout in milliseconds
      */
-    @Value("${micronaut.config.registration.ldap.readTimeout:30000}")
+    @Value("${micronaut.config.registration.directory.ldap.readTimeout:30000}")
     private int readTimeout;
 
     /**
      * Minimum number of connections in the connection pool
      */
-    @Value("${micronaut.config.registration.ldap.minPoolSize:3}")
+    @Value("${micronaut.config.registration.directory.ldap.minPoolSize:3}")
     private int minPoolSize;
 
     /**
      * Maximum number of connections in the connection pool
      */
-    @Value("${micronaut.config.registration.ldap.maxPoolSize:10}")
+    @Value("${micronaut.config.registration.directory.ldap.maxPoolSize:10}")
     private int maxPoolSize;
 
     /**
      * Connection pool timeout in milliseconds
      */
-    @Value("${micronaut.config.registration.ldap.poolTimeout:300000}")
+    @Value("${micronaut.config.registration.directory.ldap.poolTimeout:300000}")
     private long poolTimeout;
 
     /**
      * Maximum number of retries for failed operations
      */
-    @Value("${micronaut.config.registration.ldap.maxRetries:3}")
+    @Value("${micronaut.config.registration.directory.ldap.maxRetries:3}")
     private int maxRetries;
 
     // Existing getters/setters
@@ -430,21 +424,5 @@ public class LdapConfiguration {
     public void setPhoneNumberAttribute(String phoneNumberAttribute) {
         LOG.debug("Setting LDAP phone number attribute: {}", phoneNumberAttribute);
         this.phoneNumberAttribute = phoneNumberAttribute;
-    }
-
-    /**
-     * Returns whether LDAP integration is enabled.
-     * @return whether LDAP integration is enabled
-     */
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    /**
-     * Sets whether LDAP integration is enabled.
-     * @param enabled whether LDAP integration is enabled
-     */
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
     }
 }

@@ -55,9 +55,9 @@ import org.signal.registration.util.ClientTypes;
 import org.signal.registration.util.CompletionExceptions;
 import org.signal.registration.util.MessageTransports;
 import org.signal.registration.util.UUIDUtil;
-import org.signal.registration.ldap.LdapService;
 import org.signal.registration.directory.DirectoryService;
 import org.signal.registration.directory.DirectoryServiceFactory;
+import org.signal.registration.ldap.LdapService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,18 +73,11 @@ public class RegistrationService {
   private final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter;
   private final Clock clock;
   private final Map<String, VerificationCodeSender> sendersByName;
-  private final LdapService ldapService;
   private final DirectoryServiceFactory directoryServiceFactory;
   private DirectoryService directoryService;
-  private final boolean useLdap;
 
   @VisibleForTesting
   static final Duration SESSION_TTL_AFTER_LAST_ACTION = Duration.ofMinutes(10);
-
-  @VisibleForTesting
-  record NextActionTimes(Optional<Instant> nextSms,
-                        Optional<Instant> nextVoiceCall,
-                        Optional<Instant> nextCodeCheck) {}
 
   public RegistrationService(final SenderSelectionStrategy senderSelectionStrategy,
                            final SessionRepository sessionRepository,
@@ -94,9 +87,7 @@ public class RegistrationService {
                            @Named("check-verification-code") final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter,
                            final List<VerificationCodeSender> verificationCodeSenders,
                            final Clock clock,
-                           final LdapService ldapService,
-                           final DirectoryServiceFactory directoryServiceFactory,
-                           @Value("${micronaut.environments.development.config.registration.useLdap:false}") final boolean useLdapEnabled) {
+                           final DirectoryServiceFactory directoryServiceFactory) {
 
     this.senderSelectionStrategy = senderSelectionStrategy;
     this.sessionRepository = sessionRepository;
@@ -105,9 +96,7 @@ public class RegistrationService {
     this.sendVoiceVerificationCodeRateLimiter = sendVoiceVerificationCodeRateLimiter;
     this.checkVerificationCodeRateLimiter = checkVerificationCodeRateLimiter;
     this.clock = clock;
-    this.ldapService = ldapService;
     this.directoryServiceFactory = directoryServiceFactory;
-    this.useLdap = useLdapEnabled;
 
     this.sendersByName = verificationCodeSenders.stream()
         .collect(Collectors.toMap(VerificationCodeSender::getName, Function.identity()));
@@ -115,25 +104,13 @@ public class RegistrationService {
 
   @PostConstruct
   public void initialize() {
-    if (useLdap) {
-      LOG.info("LDAP integration is enabled - initializing LDAP service");
-      try {
-        ldapService.initialize();
-        LOG.info("LDAP service successfully initialized");
-      } catch (LDAPException e) {
-        LOG.error("Critical failure: Unable to initialize LDAP service: {}", e.getMessage(), e);
-        throw new RuntimeException("Failed to initialize LDAP service", e);
-      }
-    } else {
-      LOG.info("LDAP integration is disabled - initializing Entra ID service");
-      try {
-        directoryService = directoryServiceFactory.createDirectoryService();
-        directoryService.initialize();
-        LOG.info("Directory service successfully initialized");
-      } catch (Exception e) {
-        LOG.error("Critical failure: Unable to initialize directory service: {}", e.getMessage(), e);
-        throw new RuntimeException("Failed to initialize directory service", e);
-      }
+    try {
+      directoryService = directoryServiceFactory.createDirectoryService();
+      directoryService.initialize();
+      LOG.info("Directory service successfully initialized");
+    } catch (Exception e) {
+      LOG.error("Critical failure: Unable to initialize directory service: {}", e.getMessage(), e);
+      throw new RuntimeException("Failed to initialize directory service", e);
     }
   }
 
@@ -141,11 +118,11 @@ public class RegistrationService {
                                                                         final SessionMetadata sessionMetadata) {
     final Phonenumber.PhoneNumber phoneNumberToUse;
 
-    if (useLdap) {
+    if (directoryService instanceof LdapService) {
       String username = sessionMetadata.getUsername();
       LOG.info("Creating registration session with LDAP authentication for user: {}", username);
       
-      Optional<String> ldapPhoneNumber = ldapService.authenticateAndGetPhoneNumber(
+      Optional<String> ldapPhoneNumber = directoryService.authenticateAndGetPhoneNumber(
           username, sessionMetadata.getPassword());
           
       if (ldapPhoneNumber.isEmpty()) {
@@ -163,7 +140,7 @@ public class RegistrationService {
         throw new IllegalArgumentException("Invalid phone number format in LDAP", e);
       }
     } else {
-      LOG.debug("LDAP disabled, using provided phone number: {}", phoneNumber.getNationalNumber());
+      LOG.debug("Using provided phone number: {}", phoneNumber.getNationalNumber());
       phoneNumberToUse = phoneNumber;
     }
 

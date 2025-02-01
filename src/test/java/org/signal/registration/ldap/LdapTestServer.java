@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 public class LdapTestServer {
     private static final Logger LOG = LoggerFactory.getLogger(LdapTestServer.class);
 
-    @Value("${micronaut.config.registration.ldap.baseDn}")
+    @Value("${micronaut.config.registration.directory.ldap.baseDn}")
     private String baseDn;
 
     @Value("${test.testUser}")

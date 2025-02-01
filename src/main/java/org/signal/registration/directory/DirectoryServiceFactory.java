@@ -1,11 +1,13 @@
 package org.signal.registration.directory;
 
+import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
 import org.signal.registration.directory.entra.EntraIdConfiguration;
 import org.signal.registration.directory.entra.EntraIdDirectoryService;
 import org.signal.registration.ldap.LdapConfiguration;
 import org.signal.registration.ldap.LdapService;
 import org.signal.registration.directory.DirectoryService;
+import org.signal.registration.directory.DirectoryType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Optional;
@@ -13,46 +15,40 @@ import java.util.Optional;
 /**
  * Factory for creating the appropriate DirectoryService implementation
  */
-@Singleton
+@jakarta.inject.Singleton
 public class DirectoryServiceFactory {
     private static final Logger logger = LoggerFactory.getLogger(DirectoryServiceFactory.class);
 
     private final LdapConfiguration ldapConfig;
     private final EntraIdConfiguration entraConfig;
+    private final DirectoryType directoryType;
 
-    public DirectoryServiceFactory(LdapConfiguration ldapConfig, EntraIdConfiguration entraConfig) {
+    public DirectoryServiceFactory(LdapConfiguration ldapConfig, 
+                                 EntraIdConfiguration entraConfig,
+                                 DirectoryType directoryType) {
         this.ldapConfig = ldapConfig;
         this.entraConfig = entraConfig;
+        this.directoryType = directoryType;
     }
 
     /**
      * Creates and returns the appropriate DirectoryService implementation based on configuration.
-     * Only one directory service can be active at a time.
      *
      * @return the configured DirectoryService implementation
-     * @throws IllegalStateException if both LDAP and Entra ID are enabled or if no services are enabled
      */
     public DirectoryService createDirectoryService() {
-        boolean ldapEnabled = ldapConfig != null && ldapConfig.isEnabled();
-        boolean entraEnabled = entraConfig != null && entraConfig.isEnabled();
-
-        if (ldapEnabled && entraEnabled) {
-            logger.error("Both LDAP and Microsoft Entra ID are enabled. Only one directory service can be active at a time.");
-            throw new IllegalStateException("Both LDAP and Microsoft Entra ID are enabled. Please enable only one directory service.");
+        switch (directoryType) {
+            case ENTRA_ID:
+                logger.info("Using Microsoft Entra ID directory service");
+                return new EntraIdDirectoryService(entraConfig);
+            case LDAP:
+                logger.info("Using LDAP directory service");
+                return new LdapService(ldapConfig);
+            case NONE:
+            default:
+                logger.info("No directory service is enabled");
+                return new NoOpDirectoryService();
         }
-
-        if (entraEnabled) {
-            logger.info("Using Microsoft Entra ID directory service");
-            return new EntraIdDirectoryService(entraConfig);
-        }
-
-        if (ldapEnabled) {
-            logger.info("Using LDAP directory service");
-            return new LdapService(ldapConfig);
-        }
-
-        logger.info("No directory service is enabled");
-        return new NoOpDirectoryService();
     }
 
     /**

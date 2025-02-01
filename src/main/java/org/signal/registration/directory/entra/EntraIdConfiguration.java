@@ -1,27 +1,36 @@
 package org.signal.registration.directory.entra;
 
 import io.micronaut.context.annotation.ConfigurationProperties;
+import io.micronaut.context.annotation.Value;
+import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Configuration properties for Microsoft Entra ID integration (formerly Azure AD)
  */
-@ConfigurationProperties("micronaut.config.registration.entra-id")
+@Singleton
+@ConfigurationProperties("micronaut.config.registration.directory.entra-id")
 public class EntraIdConfiguration {
-    private boolean enabled = false;
+    private static final Logger LOG = LoggerFactory.getLogger(EntraIdConfiguration.class);
+
+    @Value("${micronaut.config.registration.directory.entra-id.tenant-id}")
     private String tenantId;
+
+    @Value("${micronaut.config.registration.directory.entra-id.client-id}")
     private String clientId;
+
+    @Value("${micronaut.config.registration.directory.entra-id.client-secret}")
     private String clientSecret;
-    private String certificatePath;
+
+    @Value("${micronaut.config.registration.directory.entra-id.test-user}")
     private String testUser;
+
+    @Value("${micronaut.config.registration.directory.entra-id.test-password}")
     private String testPassword;
 
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
+    @Value("${micronaut.config.registration.directory.entra-id.phone-number-attribute:mobilePhone}")
+    private String phoneNumberAttribute;
 
     public String getTenantId() {
         return tenantId;
@@ -47,14 +56,6 @@ public class EntraIdConfiguration {
         this.clientSecret = clientSecret;
     }
 
-    public String getCertificatePath() {
-        return certificatePath;
-    }
-
-    public void setCertificatePath(String certificatePath) {
-        this.certificatePath = certificatePath;
-    }
-
     public String getTestUser() {
         return testUser;
     }
@@ -69,5 +70,13 @@ public class EntraIdConfiguration {
 
     public void setTestPassword(String testPassword) {
         this.testPassword = testPassword;
+    }
+
+    public String getPhoneNumberAttribute() {
+        return phoneNumberAttribute;
+    }
+
+    public void setPhoneNumberAttribute(String phoneNumberAttribute) {
+        this.phoneNumberAttribute = phoneNumberAttribute;
     }
 }

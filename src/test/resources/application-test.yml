@@ -11,7 +11,8 @@ micronaut:
       environments: true
   config:
     registration:
-      useLdap: false
+      directory:
+        type: NONE
       ldap:
         url: ldap://localhost:11389  # Use test port
         baseDn: dc=test,dc=com
@@ -56,9 +57,10 @@ micronaut:
 
 # Test-specific configurations
 test:
+  config:
+    registration: {}
   mock:
     enabled: true
-  useLdap: false
   testUser: raja@valuelabs.com
   testUserPassword: Rat3onal
   verification:

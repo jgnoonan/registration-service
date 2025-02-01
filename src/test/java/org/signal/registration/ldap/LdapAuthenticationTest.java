@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * These tests verify the LDAP authentication process, including successful authentication,
  * failed authentication scenarios, and proper handling of edge cases.
  */
-@MicronautTest(environments = {"test"}, startApplication = false)
-@Property(name = "test.useLdap", value = "true")
+@MicronautTest
+@Property(name = "micronaut.config.registration.directory.type", value = "LDAP")
 public class LdapAuthenticationTest {
     private static final Logger LOG = LoggerFactory.getLogger(LdapAuthenticationTest.class);
     private static final String VALID_USER = "raja@valuelabs.com";

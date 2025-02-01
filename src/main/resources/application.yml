@@ -14,14 +14,9 @@ micronaut:
           export:
             datadog:
               enabled: false
-      environments: true
-      config:
-        registration:
-          useLdap: false
     production:
       config:
-        registration:
-          useLdap: false
+        registration: {}
   executors:
     scheduled:
       type: scheduled
@@ -42,40 +37,38 @@ micronaut:
       delays: 60s
   config:
     registration:
-      # Directory service type configuration
       directory:
+        # Type can be: ENTRA_ID, LDAP, or NONE
         type: ENTRA_ID
 
-      # LDAP Configuration
-      ldap:
-        enabled: false
-        url: ldaps://2f8b8c95-8509-4822-a393-dc8f12d2c829.onmicrosoft.com:636
-        baseDn: DC=comcast,DC=net
-        useSsl: true
-        trustStore: /Users/jgnoonan/registration-service/src/main/resources/certs/truststore.jks
-        trustStorePassword: changeit
-        trustStoreType: JKS
-        hostnameVerification: true
-        connectionTimeout: 30000
-        readTimeout: 30000
-        minPoolSize: 3
-        maxPoolSize: 10
-        poolTimeout: 300000
-        maxRetries: 3
-        userFilter: (userPrincipalName={0})
-        bindDn: ${ENTRA_CLIENT_ID}@comcast.net
-        bindPassword: ${ENTRA_CLIENT_SECRET}
-        phoneNumberAttribute: mobile
+        # LDAP Configuration
+        ldap:
+          url: ldap://localhost:389
+          baseDn: dc=valuelabsdc=com
+          useSsl: false
+          trustStore: /Users/jgnoonan/registration-service/src/main/resources/certs/truststore.jks
+          trustStorePassword: changeit
+          trustStoreType: JKS
+          hostnameVerification: true
+          connectionTimeout: 30000
+          readTimeout: 30000
+          minPoolSize: 3
+          maxPoolSize: 10
+          poolTimeout: 300000
+          maxRetries: 3
+          userFilter: (userPrincipalName={0})
+          bindDn: cn=admin,cn=users,dc=valuelabs,dc=com
+          bindPassword: ${LDAP_BIND_PASSWORD}
+          phoneNumberAttribute: mobile
 
-      entra-id:
-        enabled: true
-        tenant-id: 2f8b8c95-8509-4822-a393-dc8f12d2c829
-        client-id: bcd5ed86-07a1-4528-9c44-32e86b3e79ee
-        client-secret: ${ENTRA_CLIENT_SECRET}
-        test-user: jgnoonan@comcast.net
-        test-password: ${ENTRA_TEST_PASSWORD}
-
-        # certificate-path: "${ENTRA_CERTIFICATE_PATH}"  # Alternative to client secret
+        # Entra ID Configuration
+        entra-id:
+          tenant-id: ${ENTRA_TENANT_ID}
+          client-id: ${ENTRA_CLIENT_ID}
+          client-secret: ${ENTRA_CLIENT_SECRET}
+          test-user: ${ENTRA_TEST_USER}
+          test-password: ${ENTRA_TEST_PASSWORD}
+          phone-number-attribute: mobilePhone  # Can be mobilePhone, otherMobile, businessPhones, etc.
 
 messagebird:
    enabled: false
