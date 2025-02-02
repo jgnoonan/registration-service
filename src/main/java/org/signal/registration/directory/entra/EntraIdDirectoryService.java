@@ -4,33 +4,46 @@ import com.azure.core.credential.TokenCredential;
 import com.azure.core.credential.TokenRequestContext;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.UsernamePasswordCredentialBuilder;
+import com.microsoft.aad.msal4j.ConfidentialClientApplication;
+import com.microsoft.aad.msal4j.IAccount;
 import com.microsoft.aad.msal4j.IAuthenticationResult;
+import com.microsoft.aad.msal4j.IConfidentialClientApplication;
+import com.microsoft.aad.msal4j.IPublicClientApplication;
+import com.microsoft.aad.msal4j.MsalException;
 import com.microsoft.aad.msal4j.MsalServiceException;
 import com.microsoft.aad.msal4j.PublicClientApplication;
+import com.microsoft.aad.msal4j.SilentParameters;
 import com.microsoft.aad.msal4j.UserNamePasswordParameters;
 import com.microsoft.graph.authentication.BaseAuthenticationProvider;
 import com.microsoft.graph.authentication.TokenCredentialAuthProvider;
 import com.microsoft.graph.models.User;
+import com.microsoft.graph.models.ObjectIdentity;
 import com.microsoft.graph.requests.GraphServiceClient;
-import com.microsoft.graph.requests.UserCollectionPage;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
-import okhttp3.Request;
-import org.apache.commons.validator.routines.EmailValidator;
 import org.signal.registration.directory.DirectoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Mono;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+
+import com.google.i18n.phonenumbers.NumberParseException;
+import com.google.i18n.phonenumbers.PhoneNumberUtil;
+import com.google.i18n.phonenumbers.Phonenumber.PhoneNumber;
 
 /**
  * Microsoft Entra ID implementation of the DirectoryService interface
@@ -41,207 +54,186 @@ public class EntraIdDirectoryService implements DirectoryService {
     private static final String GRAPH_DEFAULT_SCOPE = "https://graph.microsoft.com/.default";
     
     private final EntraIdConfiguration config;
-    private GraphServiceClient graphClient;
-    private boolean initialized = false;
+    private volatile GraphServiceClient graphClient;
+    private volatile boolean initialized = false;
+    private final Object initLock = new Object();
 
     public EntraIdDirectoryService(EntraIdConfiguration config) {
+        logger.info("Creating EntraIdDirectoryService");
         this.config = config;
+        logger.info("Configuration received - Tenant ID: {}, Client ID: {}, Test User: {}", 
+                   config.getTenantId(), config.getClientId(), config.getTestUser());
     }
 
     @PostConstruct
     public void initialize() {
-        try {
-            logger.info("Initializing Microsoft Entra ID service with configuration: tenantId={}, clientId={}", 
-                config.getTenantId(), config.getClientId());
+        logger.info("Initializing EntraIdDirectoryService");
+        initializeIfNeeded();
+    }
 
-            // Create the credential for accessing Microsoft Graph API
-            logger.debug("Creating client credentials for Microsoft Graph API");
-            final TokenCredential credential = new ClientSecretCredentialBuilder()
-                .authorityHost("https://login.microsoftonline.com")
-                .tenantId(config.getTenantId())
-                .clientId(config.getClientId())
-                .clientSecret(config.getClientSecret())
-                .build();
+    private void initializeIfNeeded() {
+        if (!initialized) {
+            synchronized (initLock) {
+                if (!initialized) {
+                    try {
+                        logger.info("Initializing Microsoft Entra ID service with configuration: tenantId={}, clientId={}", 
+                            config.getTenantId(), config.getClientId());
 
-            // Create an auth provider for Microsoft Graph
-            logger.debug("Creating token credential auth provider");
-            final TokenCredentialAuthProvider authProvider = new TokenCredentialAuthProvider(
-                Collections.singletonList(GRAPH_DEFAULT_SCOPE), credential);
+                        // Create the credential for accessing Microsoft Graph API
+                        logger.debug("Creating client credentials for Microsoft Graph API");
+                        final TokenCredential credential = new ClientSecretCredentialBuilder()
+                            .authorityHost("https://login.microsoftonline.com")
+                            .tenantId(config.getTenantId())
+                            .clientId(config.getClientId())
+                            .clientSecret(config.getClientSecret())
+                            .build();
+                        logger.info("Client credentials built successfully");
 
-            // Initialize Microsoft Graph client
-            logger.debug("Building Microsoft Graph client");
-            graphClient = GraphServiceClient.builder()
-                .authenticationProvider(authProvider)
-                .buildClient();
+                        // Create an auth provider for Microsoft Graph
+                        logger.debug("Creating token credential auth provider");
+                        final TokenCredentialAuthProvider authProvider = new TokenCredentialAuthProvider(
+                            Collections.singletonList(GRAPH_DEFAULT_SCOPE), credential);
+                        logger.info("Auth provider created successfully");
 
-            // Test the connection by making a simple request
-            logger.info("Testing connection to Microsoft Entra ID by retrieving top user");
-            graphClient.users().buildRequest().top(1).get();
-            logger.info("Successfully tested connection to Microsoft Entra ID");
+                        // Initialize Microsoft Graph client
+                        logger.debug("Building Microsoft Graph client");
+                        graphClient = GraphServiceClient.builder()
+                            .authenticationProvider(authProvider)
+                            .buildClient();
+                        logger.info("Graph client built successfully");
 
-            initialized = true;
-            logger.info("Microsoft Entra ID directory service initialized successfully");
-        } catch (Exception e) {
-            logger.error("Failed to initialize Microsoft Entra ID directory service: {}", e.getMessage(), e);
-            throw e;
+                        // Test the connection by making a simple request
+                        logger.info("Testing connection to Microsoft Entra ID by retrieving top user");
+                        graphClient.users().buildRequest().top(1).get();
+                        logger.info("Successfully tested connection to Microsoft Entra ID");
+
+                        initialized = true;
+                        logger.info("EntraIdDirectoryService initialized successfully");
+                    } catch (Exception e) {
+                        logger.error("Failed to initialize Microsoft Entra ID service", e);
+                        throw new RuntimeException("Failed to initialize Microsoft Entra ID service", e);
+                    }
+                }
+            }
         }
     }
 
     @Override
     public Optional<String> authenticateAndGetPhoneNumber(String userId, String password) {
-        if (!initialized) {
-            logger.error("Microsoft Entra ID directory service is not initialized");
-            return Optional.empty();
-        }
+        initializeIfNeeded();
 
         if (userId == null || password == null || userId.trim().isEmpty() || password.trim().isEmpty()) {
             logger.error("Invalid credentials: userId or password is null or empty");
             return Optional.empty();
         }
 
-        if (!isValidEmail(userId)) {
-            logger.error("Invalid email format provided: {}", userId);
-            return Optional.empty();
-        }
-
+        logger.info("Attempting authentication with UPN: {}", userId);
         try {
-            logger.debug("Creating PublicClientApplication for user authentication");
-            PublicClientApplication pca = PublicClientApplication.builder(config.getClientId())
-                .authority("https://login.microsoftonline.com/" + config.getTenantId())
-                .build();
-
-            // Set up the parameters for the token request
-            logger.debug("Setting up ROPC flow parameters for user: {}", userId);
-            UserNamePasswordParameters parameters = UserNamePasswordParameters
-                .builder(Collections.singleton("https://graph.microsoft.com/.default"), 
-                    userId, 
-                    password.toCharArray())
-                .build();
-
-            // Acquire token
-            logger.info("Attempting to acquire token for user: {}", userId);
-            CompletableFuture<IAuthenticationResult> future = pca.acquireToken(parameters);
-            try {
-                IAuthenticationResult result = future.get(30, TimeUnit.SECONDS);  // Add timeout
-                if (result == null || result.accessToken() == null) {
-                    logger.info("Failed to get access token for user: {}", userId);
-                    return Optional.empty();
-                }
-                logger.debug("Successfully acquired token for user: {}", userId);
-            } catch (Exception e) {
-                logger.info("Failed to validate password for user: {}", userId);
-                if (e instanceof MsalServiceException) {
-                    logger.debug("MSAL error details: {}", ((MsalServiceException) e).getMessage());
-                }
-                return Optional.empty();
-            }
-
-            // If we got here, the password is valid. Now search for the user using their email
-            String filter = "mail eq '" + userId + "' or userPrincipalName eq '" + userId + "'";
-            logger.info("Searching for user with filter: {}", filter);
-            
-            List<User> users = graphClient.users()
-                .buildRequest()
-                .filter(filter)
-                .select("displayName," + config.getPhoneNumberAttribute() + ",businessPhones,userPrincipalName,mail")
-                .get()
-                .getCurrentPage();
-
-            if (users == null || users.isEmpty()) {
-                logger.info("No user found with email: {}", userId);
-                return Optional.empty();
-            }
-
-            User user = users.get(0);
-            logger.info("Found user: displayName={}, userPrincipalName={}, mail={}", 
-                user.displayName, user.userPrincipalName, user.mail);
-
-            // Try configured phoneNumberAttribute first, then businessPhones as fallback
-            String phoneNumber = null;
-            
-            // Use reflection to get the configured phone number attribute
-            try {
-                java.lang.reflect.Method getter = User.class.getMethod("get" + 
-                    config.getPhoneNumberAttribute().substring(0, 1).toUpperCase() + 
-                    config.getPhoneNumberAttribute().substring(1));
-                Object value = getter.invoke(user);
-                if (value != null) {
-                    if (value instanceof String) {
-                        phoneNumber = (String) value;
-                        logger.debug("Using {}: {}", config.getPhoneNumberAttribute(), phoneNumber);
-                    } else if (value instanceof List) {
-                        @SuppressWarnings("unchecked")
-                        List<String> phones = (List<String>) value;
-                        if (!phones.isEmpty()) {
-                            phoneNumber = phones.get(0);
-                            logger.debug("Using first {} from list: {}", config.getPhoneNumberAttribute(), phoneNumber);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                logger.warn("Failed to get configured phone attribute '{}': {}", 
-                    config.getPhoneNumberAttribute(), e.getMessage());
-            }
-
-            // Fallback to businessPhones if configured attribute not found
-            if (phoneNumber == null && user.businessPhones != null && !user.businessPhones.isEmpty()) {
-                logger.debug("Using first businessPhone as fallback: {}", user.businessPhones.get(0));
-                phoneNumber = user.businessPhones.get(0);
-            }
-
-            if (phoneNumber == null) {
-                logger.info("No phone number found for user: {}", userId);
-                return Optional.empty();
-            }
-
-            String normalizedNumber = normalizePhoneNumber(phoneNumber);
-            logger.info("Successfully retrieved and normalized phone number for user: {} -> {}", 
-                userId, normalizedNumber);
-            return Optional.of(normalizedNumber);
-
+            return tryAuthentication(userId, password);
         } catch (Exception e) {
-            logger.error("Failed to authenticate user: {} - Error: {}", userId, e.getMessage(), e);
-            return Optional.empty();
+            logger.error("Authentication failed for user: {}", userId);
+            logger.error("Error details: {}", e.getMessage());
+            throw new RuntimeException("Authentication failed: " + e.getMessage(), e);
         }
     }
 
-    private boolean isValidEmail(String email) {
-        if (email == null || email.trim().isEmpty()) {
-            logger.error("Invalid email format provided: {}", email);
-            return false;
-        }
+    private Optional<String> tryAuthentication(final String userId, final String password) {
+        logger.info("Attempting to authenticate and verify user: {}", userId);
+        logger.info("Password length: {}, contains spaces: {}, starts/ends with whitespace: {}", 
+            password.length(), password.contains(" "), 
+            (password.startsWith(" ") || password.endsWith(" ")));
 
-        // Check for standard email format using Apache Commons Validator
-        EmailValidator emailValidator = EmailValidator.getInstance();
-        
-        // If it's a standard email, validate it directly
-        if (emailValidator.isValid(email)) {
-            return true;
-        }
-        
-        // For Azure AD external users (with #EXT#), extract and validate the original email
-        if (email.contains("#EXT#")) {
-            String[] parts = email.split("#EXT#");
-            if (parts.length > 0) {
-                String originalEmail = parts[0].replace("_", "@");
-                return emailValidator.isValid(originalEmail);
+        try {
+            // First verify the user exists using client credentials (which we already have in graphClient)
+            User user = graphClient.users()
+                .byId(userId)
+                .buildRequest()
+                .select("displayName,userPrincipalName,mail,mobilePhone")
+                .get();
+
+            if (user != null) {
+                logger.info("Found user: displayName={}, userPrincipalName={}, mail={}", 
+                    user.displayName, user.userPrincipalName, user.mail);
+                logger.info("User ID: {}", user.id);
+
+                // Now verify password using token endpoint directly
+                String tokenEndpoint = String.format("https://login.microsoftonline.com/%s/oauth2/v2.0/token", config.getTenantId());
+                logger.info("Using token endpoint: {}", tokenEndpoint);
+
+                // Create URL-encoded form parameters
+                String formParams = String.format(
+                    "client_id=%s&client_secret=%s&scope=https://graph.microsoft.com/.default&username=%s&password=%s&grant_type=password",
+                    URLEncoder.encode(config.getClientId(), StandardCharsets.UTF_8),
+                    URLEncoder.encode(config.getClientSecret(), StandardCharsets.UTF_8),
+                    URLEncoder.encode(userId, StandardCharsets.UTF_8),
+                    URLEncoder.encode(password, StandardCharsets.UTF_8)
+                );
+
+                // Create HTTP connection
+                HttpURLConnection conn = (HttpURLConnection) new URL(tokenEndpoint).openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                conn.setDoOutput(true);
+
+                // Write form parameters
+                try (OutputStream os = conn.getOutputStream()) {
+                    byte[] input = formParams.getBytes(StandardCharsets.UTF_8);
+                    os.write(input, 0, input.length);
+                }
+
+                // Get response
+                int responseCode = conn.getResponseCode();
+                logger.info("Token endpoint response code: {}", responseCode);
+
+                // Read error response if available
+                if (responseCode != 200) {
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8))) {
+                        StringBuilder response = new StringBuilder();
+                        String responseLine;
+                        while ((responseLine = br.readLine()) != null) {
+                            response.append(responseLine.trim());
+                        }
+                        logger.error("Error response from token endpoint: {}", response.toString());
+                    }
+                }
+
+                if (responseCode == 200) {
+                    logger.info("Successfully authenticated user");
+                    return Optional.ofNullable(normalizePhoneNumber(user.mobilePhone));
+                } else {
+                    logger.error("Failed to authenticate user. Response code: {}", responseCode);
+                    throw new RuntimeException("Invalid credentials");
+                }
             }
+            
+            logger.error("User not found: {}", userId);
+            throw new RuntimeException("User not found");
+        } catch (Exception e) {
+            logger.error("Authentication error: {}", e.getMessage());
+            throw new RuntimeException("Invalid credentials");
         }
-        
-        logger.error("Invalid email format provided: {}", email);
-        return false;
     }
 
     private String normalizePhoneNumber(String phoneNumber) {
-        // Remove any non-digit characters except '+'
-        String normalized = phoneNumber.replaceAll("[^\\d+]", "");
+        if (phoneNumber == null) return null;
         
-        // Ensure it starts with a '+'
-        if (!normalized.startsWith("+")) {
-            normalized = "+" + normalized;
+        try {
+            // Parse phone number (assume US if no country code provided)
+            PhoneNumberUtil phoneUtil = PhoneNumberUtil.getInstance();
+            PhoneNumber number = phoneUtil.parse(phoneNumber, "US");
+            
+            // Validate the number
+            if (!phoneUtil.isValidNumber(number)) {
+                logger.error("Invalid phone number format: {}", phoneNumber);
+                return null;
+            }
+            
+            // Format in E.164 format
+            return phoneUtil.format(number, PhoneNumberUtil.PhoneNumberFormat.E164);
+        } catch (NumberParseException e) {
+            logger.error("Error parsing phone number {}: {}", phoneNumber, e.getMessage());
+            return null;
         }
-        
-        return normalized;
     }
 
     @Override

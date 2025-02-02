@@ -13,11 +13,11 @@ import java.time.Clock;
 
 @Factory
 @Requires(env = "test")
-public class TestRateLimiterConfiguration {
+public class TestRateLimiterFactory {
 
     private final Clock clock;
 
-    public TestRateLimiterConfiguration(final Clock clock) {
+    public TestRateLimiterFactory(final Clock clock) {
         this.clock = clock;
     }
 

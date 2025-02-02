@@ -12,13 +12,20 @@ micronaut:
   config:
     registration:
       directory:
-        type: NONE
+        type: ENTRA_ID
+        entra-id:
+          tenant-id: ${ENTRA_TENANT_ID:test-tenant-id}
+          client-id: ${ENTRA_CLIENT_ID:test-client-id}
+          client-secret: ${ENTRA_CLIENT_SECRET:test-client-secret}
+          test-user: ${ENTRA_TEST_USER:test-user}
+          test-password: ${ENTRA_TEST_PASSWORD:test-password}
+          phone-number-attribute: mobilePhone
       ldap:
-        url: ldap://localhost:11389  # Use test port
-        baseDn: dc=test,dc=com
-        bindDn: cn=admin,dc=test,dc=com
-        bindPassword: test
-        userFilter: (|(uid={0})(mail={0}))
+        url: ${LDAP_URL:ldap://localhost:11389}  # Use test port
+        baseDn: ${LDAP_BASE_DN:dc=test,dc=com}
+        bindDn: ${LDAP_BIND_DN:cn=admin,dc=test,dc=com}
+        bindPassword: ${LDAP_BIND_PASSWORD:test-bind-password}
+        userFilter: ${LDAP_USER_FILTER:(|(uid={0})(mail={0}))}
         phoneNumberAttribute: mobile
         useSsl: false
         minPoolSize: 1
@@ -27,14 +34,21 @@ micronaut:
         testUser: test@test.com
         testUserPassword: test
   metrics:
-    enabled: true
+    enabled: false
     export:
       datadog:
         enabled: false
       prometheus:
-        enabled: true
+        enabled: false
         step: PT1M
         descriptions: true
+
+entra:
+  tenant-id: ${ENTRA_TENANT_ID:test-tenant-id}
+  client-id: ${ENTRA_CLIENT_ID:test-client-id}
+  client-secret: ${ENTRA_CLIENT_SECRET:test-client-secret}
+  test-user: ${ENTRA_TEST_USER:test-user}
+  test-password: ${ENTRA_TEST_PASSWORD:test-password}
 
 twilio:
   verify:
@@ -48,10 +62,10 @@ twilio:
 # Metrics configuration
 micronaut:
   metrics:
-    enabled: true
+    enabled: false
     export:
       prometheus:
-        enabled: true
+        enabled: false
         step: PT1M
         descriptions: true
 
@@ -69,13 +83,49 @@ test:
 ldap:
   enabled: false
   test-mode: true
-  url: "ldap://localhost:389"
-  base-dn: "dc=test,dc=local"
+  url: ${LDAP_URL:ldap://localhost:389}
+  base-dn: ${LDAP_BASE_DN:dc=test,dc=local}
   use-ssl: false
+  bind-password: ${LDAP_BIND_PASSWORD:test-bind-password}
+  bind-dn: ${LDAP_BIND_DN:cn=admin,dc=example,dc=com}
+  user-filter: ${LDAP_USER_FILTER:(uid={0})}
 
 redis:
-  uri: "redis://localhost:6379"
+  enabled: false
   test-mode: true
+
+micronaut:
+  metrics:
+    enabled: false
+
+rate-limits:
+  leaky-bucket:
+    test-bucket:
+      maxCapacity: 2
+      permitRegenerationPeriod: 1m
+      minDelay: 5s
+
+rate-limiter:
+  session-creation:
+    name: session-creation
+    bucket-size: 2
+    leak-rate-per-minute: 1
+  send-sms-verification-code:
+    name: send-sms-verification-code
+    bucket-size: 2
+    leak-rate-per-minute: 1
+    delays: 1m,2m,5m,10m
+  send-voice-verification-code:
+    name: send-voice-verification-code
+    bucket-size: 2
+    leak-rate-per-minute: 1
+    delays: 1m,5m
+    delay-after-first-sms: 1m
+  check-verification-code:
+    name: check-verification-code
+    bucket-size: 2
+    leak-rate-per-minute: 1
+    delays: 0s,0s,1m,2m
 
 registration:
   session:
@@ -94,6 +144,13 @@ registration:
     check-verification-code:
       bucket-size: 2
       leak-rate-per-minute: 1
+  bigtable:
+    session-repository:
+      table-name: registration-service-test
+      column-family-name: d
+    attempt-analysis:
+      table-name: test-attempts
+      column-family-name: test-cf
 
 # Configure rate limiters for testing
 rateLimits:
@@ -126,6 +183,20 @@ rate-limits:
     delays: 1s,2s,5s,10s
   check-verification-code:
     delays: 1s,2s,5s,10s
+
+# Test configurations
+session-repository:
+  bigtable:
+    table-name: test-table
+    column-family-name: test-family
+
+rate-limits:
+  leaky-bucket:
+    test-bucket:
+      name: test-bucket
+      maxCapacity: 2
+      permitRegenerationPeriod: 1m
+      minDelay: 5s
 
 # Sender selection configuration
 selection:

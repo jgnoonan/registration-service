@@ -1,8 +1,10 @@
 package org.signal.registration.ldap;
 
 import io.micronaut.context.annotation.ConfigurationProperties;
+import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
+import org.signal.registration.directory.DirectoryType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,6 +15,7 @@ import org.slf4j.LoggerFactory;
  */
 @Singleton
 @ConfigurationProperties("micronaut.config.registration.directory.ldap")
+@Requires(property = "micronaut.config.registration.directory.type", value = "LDAP")
 public class LdapConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(LdapConfiguration.class);
 

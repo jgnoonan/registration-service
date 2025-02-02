@@ -6,26 +6,39 @@
 package org.signal.registration.sender.twilio;
 
 import com.twilio.exception.ApiException;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.CompletionException;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ApiExceptionsTest {
 
-  @Test
-  void extractErrorCode() {
-    final ApiException apiException = new ApiException("Test error", 404);
-    assertEquals(404, ApiExceptions.extractErrorCode(apiException));
-  }
+    @Test
+    void testExtractErrorCode() {
+        // Test a retriable error code
+        ApiException retriableException = new ApiException("Too Many Requests", 20429, null, 500, null);
+        assertEquals("20429", ApiExceptions.extractErrorCode(retriableException));
 
-  @Test
-  void convertToStatusRuntimeException() {
-    final ApiException apiException = new ApiException("Test error", 404);
-    final StatusRuntimeException statusRuntimeException = ApiExceptions.convertToStatusRuntimeException(apiException);
-    assertEquals(Status.NOT_FOUND.getCode(), statusRuntimeException.getStatus().getCode());
-  }
+        // Test a non-retriable error code
+        ApiException nonRetriableException = new ApiException("Invalid parameter", 60200, null, 400, null);
+        assertEquals("60200", ApiExceptions.extractErrorCode(nonRetriableException));
+
+        // Test a non-ApiException
+        RuntimeException runtimeException = new RuntimeException("Test exception");
+        assertNull(ApiExceptions.extractErrorCode(runtimeException));
+    }
+
+    @Test
+    void testIsRetriable() {
+        // Test a retriable error code
+        ApiException retriableException = new ApiException("Too Many Requests", 20429, null, 500, null);
+        assertTrue(ApiExceptions.isRetriable(retriableException));
+
+        // Test a non-retriable error code
+        ApiException nonRetriableException = new ApiException("Invalid parameter", 60200, null, 400, null);
+        assertFalse(ApiExceptions.isRetriable(nonRetriableException));
+
+        // Test a non-ApiException
+        RuntimeException runtimeException = new RuntimeException("Test exception");
+        assertFalse(ApiExceptions.isRetriable(runtimeException));
+    }
 }

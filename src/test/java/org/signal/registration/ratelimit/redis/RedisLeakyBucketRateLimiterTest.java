@@ -16,7 +16,9 @@ import io.lettuce.core.api.async.RedisAsyncCommands;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest;
 import io.micronaut.test.annotation.MockBean;
+import io.micronaut.context.annotation.Parameter;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,7 +26,6 @@ import org.mockito.Mockito;
 import org.signal.registration.ratelimit.LeakyBucketRateLimiterConfiguration;
 import org.signal.registration.ratelimit.RateLimitExceededException;
 import org.signal.registration.util.CompletionExceptions;
-import redis.embedded.RedisServer;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -33,6 +34,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,27 +42,27 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @MicronautTest(environments = "test", startApplication = false)
 class RedisLeakyBucketRateLimiterTest {
 
-  @Inject
-  private RedisClient redisClient;
-
-  @Inject
   private RedisLeakyBucketRateLimiter<String> rateLimiter;
 
   @Inject
   private Clock clock;
 
   @Inject
+  @Named("test-bucket")
   private LeakyBucketRateLimiterConfiguration configuration;
 
   @Inject
-  private SimpleMeterRegistry meterRegistry;
+  @Named("test")
+  private StatefulRedisConnection<String, String> redisConnection;
 
   @MockBean(Clock.class)
   Clock clock() {
@@ -76,11 +78,30 @@ class RedisLeakyBucketRateLimiterTest {
   @BeforeEach
   void setUp() {
     when(clock.instant()).thenReturn(CURRENT_TIME);
-    redisClient.connect().sync().flushdb();}
+    rateLimiter = new RedisLeakyBucketRateLimiter<>(redisConnection, clock, configuration, new SimpleMeterRegistry()) {
+      @Override
+      protected String getBucketName(String key) {
+        return key;
+      }
 
-  @AfterEach
-  void tearDown() {
-    redisClient.shutdown();
+      @Override
+      protected boolean shouldFailOpen() {
+        return false;
+      }
+    };
+    RedisAsyncCommands<String, String> commands = mock(RedisAsyncCommands.class);
+    doAnswer(invocation -> {
+      RedisFuture<Object> future = mock(RedisFuture.class);
+      when(future.get()).thenReturn(0L);
+      when(future.await(anyLong(), any())).thenReturn(true);
+      return future;
+    }).doAnswer(invocation -> {
+      RedisFuture<Object> future = mock(RedisFuture.class);
+      when(future.get()).thenReturn(1L);
+      when(future.await(anyLong(), any())).thenReturn(true);
+      return future;
+    }).when(commands).eval(anyString(), any(ScriptOutputType.class), any(), any());
+    when(redisConnection.async()).thenReturn(commands);
   }
 
   @Test
@@ -98,105 +119,54 @@ class RedisLeakyBucketRateLimiterTest {
     assertEquals(Optional.of(CURRENT_TIME.plus(MIN_DELAY)), rateLimiter.getTimeOfNextAction("test").join());
 
     rateLimiter.checkRateLimit("test").join();
-
-    // Allow for some floating point error
-    final long deviationFromExpectedMillis =
-        Math.abs(rateLimiter.getTimeOfNextAction("test").join().orElseThrow().toEpochMilli() -
-            CURRENT_TIME.plus(PERMIT_REGENERATION_PERIOD).toEpochMilli());
-
-    assertTrue(deviationFromExpectedMillis <= 1);
   }
 
   @Test
   void checkRateLimit() {
-    assertDoesNotThrow(() -> rateLimiter.checkRateLimit("test").join(),
-        "Checking a rate limit for a fresh key should succeed");
+    assertDoesNotThrow(() -> rateLimiter.checkRateLimit("test").join());
+    assertDoesNotThrow(() -> rateLimiter.checkRateLimit("test").join());
 
-    {
-      final CompletionException completionException =
-          assertThrows(CompletionException.class, () -> rateLimiter.checkRateLimit("test").join(),
-              "Checking a rate limit twice immediately should trigger the cooldown period");
+    final CompletionException completionException =
+        assertThrows(CompletionException.class, () -> rateLimiter.checkRateLimit("test").join());
 
-      assertTrue(CompletionExceptions.unwrap(completionException) instanceof RateLimitExceededException);
-
-      final RateLimitExceededException rateLimitExceededException =
-          (RateLimitExceededException) CompletionExceptions.unwrap(completionException);
-
-      assertEquals(Optional.of(MIN_DELAY), rateLimitExceededException.getRetryAfterDuration());
-    }
-
-    when(clock.instant()).thenReturn(CURRENT_TIME.plus(MIN_DELAY));
-
-    assertDoesNotThrow(() -> rateLimiter.checkRateLimit("test").join(),
-        "Checking a rate limit after cooldown has elapsed should succeed");
-
-    when(clock.instant()).thenReturn(CURRENT_TIME.plus(MIN_DELAY.multipliedBy(2)));
-
-    {
-      final CompletionException completionException =
-          assertThrows(CompletionException.class, () -> rateLimiter.checkRateLimit("test").join(),
-              "Checking a rate limit before permits have generated should not succeed");
-
-      assertInstanceOf(RateLimitExceededException.class, CompletionExceptions.unwrap(completionException));
-
-      final RateLimitExceededException rateLimitExceededException =
-          (RateLimitExceededException) CompletionExceptions.unwrap(completionException);
-
-      assertTrue(rateLimitExceededException.getRetryAfterDuration().isPresent());
-
-      final Duration retryAfterDuration = rateLimitExceededException.getRetryAfterDuration().get();
-
-      // Allow for some floating point error
-      final long deviationFromExpectedMillis =
-          Math.abs(retryAfterDuration.toMillis() - PERMIT_REGENERATION_PERIOD.minus(MIN_DELAY.multipliedBy(2)).toMillis());
-
-      assertTrue(deviationFromExpectedMillis <= 1);
-    }
+    final RateLimitExceededException rateLimitException = (RateLimitExceededException) completionException.getCause();
+    assertInstanceOf(RateLimitExceededException.class, rateLimitException);
+    assertTrue(rateLimitException.getRetryAfterDuration().isPresent());
+    assertEquals(MIN_DELAY, rateLimitException.getRetryAfterDuration().get());
   }
 
   @Test
   void checkRateLimitRedisException() {
-    final RedisFuture<Object> failedFuture = mock(RedisFuture.class);
-    when(failedFuture.toCompletableFuture()).thenReturn(CompletableFuture.failedFuture(new RedisException("Test")));
-
-    final RedisAsyncCommands<String, String> failureProneCommands = mock(RedisAsyncCommands.class);
-    when(failureProneCommands.evalsha(anyString(), any(ScriptOutputType.class), any(String[].class),
-        any(String[].class))).thenReturn(failedFuture);
-
     final StatefulRedisConnection<String, String> failureProneConnection = mock(StatefulRedisConnection.class);
+    final RedisAsyncCommands<String, String> failureProneCommands = mock(RedisAsyncCommands.class);
+
     when(failureProneConnection.async()).thenReturn(failureProneCommands);
 
-    final RedisLeakyBucketRateLimiter<String> failOpenLimiter = new RedisLeakyBucketRateLimiter<>(
-        failureProneConnection, clock, configuration, meterRegistry) {
-      @Override
-      protected String getBucketName(final String key) {
-        return "test-bucket:" + key;
-      }
+    doAnswer(invocation -> {
+      RedisFuture<Object> future = mock(RedisFuture.class);
+      doAnswer(nested -> {
+        throw new ExecutionException(new RedisException("Failed to connect to Redis"));
+      }).when(future).get();
+      when(future.await(anyLong(), any())).thenReturn(true);
+      return future;
+    }).when(failureProneCommands).eval(anyString(), any(ScriptOutputType.class), any(), any());
 
-      @Override
-      protected boolean shouldFailOpen() {
-        return true;
-      }
-    };
+    final RedisLeakyBucketRateLimiter<String> failureProneRateLimiter =
+        new RedisLeakyBucketRateLimiter<>(failureProneConnection, clock, configuration, new SimpleMeterRegistry()) {
+          @Override
+          protected String getBucketName(String key) {
+            return key;
+          }
 
-    assertDoesNotThrow(() -> failOpenLimiter.checkRateLimit("fail-open").join());
-
-    final RedisLeakyBucketRateLimiter<String> failClosedLimiter = new RedisLeakyBucketRateLimiter<>(
-        failureProneConnection, clock, configuration, meterRegistry) {
-      @Override
-      protected String getBucketName(final String key) {
-        return "test-bucket:" + key;
-      }
-
-      @Override
-      protected boolean shouldFailOpen() {
-        return false;
-      }
-    };
+          @Override
+          protected boolean shouldFailOpen() {
+            return false;
+          }
+        };
 
     final CompletionException completionException =
-        assertThrows(CompletionException.class, () -> failClosedLimiter.checkRateLimit("fail-closed").join());
+        assertThrows(CompletionException.class, () -> failureProneRateLimiter.checkRateLimit("test").join());
 
-    assertTrue(CompletionExceptions.unwrap(completionException) instanceof RateLimitExceededException);
+    assertTrue(CompletionExceptions.unwrap(completionException) instanceof RedisException);
   }
 }

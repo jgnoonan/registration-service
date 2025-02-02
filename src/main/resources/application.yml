@@ -3,10 +3,11 @@ micronaut:
   application:
     name: registrationService
   metrics:
-    enabled: true
+    enabled: false
     export:
       datadog:
         enabled: false
+        apiKey: null
   environments:
     development:
       micronaut:
@@ -38,7 +39,6 @@ micronaut:
   config:
     registration:
       directory:
-        # Type can be: ENTRA_ID, LDAP, or NONE
         type: ENTRA_ID
 
         # LDAP Configuration
@@ -46,8 +46,8 @@ micronaut:
           url: ldap://localhost:389
           baseDn: dc=valuelabsdc=com
           useSsl: false
-          trustStore: /Users/jgnoonan/registration-service/src/main/resources/certs/truststore.jks
-          trustStorePassword: changeit
+          trustStore: ${TRUST_STORE}
+          trustStorePassword: ${TRUST_STORE_PASSWORD}
           trustStoreType: JKS
           hostnameVerification: true
           connectionTimeout: 30000

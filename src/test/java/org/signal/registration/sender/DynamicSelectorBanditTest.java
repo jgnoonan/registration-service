@@ -72,7 +72,7 @@ public class DynamicSelectorBanditTest {
         verificationStatsProvider,
         random);
 
-    this.selector = new DynamicSelector(random, new SimpleMeterRegistry(), config, adaptiveStrategy, verificationCodeSenders);
+    this.selector = new DynamicSelector(random, Optional.of(new SimpleMeterRegistry()), config, adaptiveStrategy, verificationCodeSenders);
   }
 
   public String chooseName(final String phoneNumber, final String region, final String language) {

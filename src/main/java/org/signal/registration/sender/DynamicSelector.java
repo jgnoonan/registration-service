@@ -1,6 +1,5 @@
 package org.signal.registration.sender;
 
-
 import com.google.i18n.phonenumbers.Phonenumber;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micronaut.context.annotation.EachBean;
@@ -56,11 +55,11 @@ public class DynamicSelector {
   private final Map<String, VerificationCodeSender> regionOverrides;
   private final Map<String, VerificationCodeSender> senders;
   private final AdaptiveStrategy strategy;
-  private final MeterRegistry meterRegistry;
+  private final Optional<MeterRegistry> meterRegistry;
 
   public DynamicSelector(
       final RandomGenerator random,
-      final MeterRegistry meterRegistry,
+      final Optional<MeterRegistry> meterRegistry,
       final DynamicSelectorConfiguration config,
       final AdaptiveStrategy adaptiveStrategy,
       final List<VerificationCodeSender> verificationCodeSenders) {
@@ -153,11 +152,13 @@ public class DynamicSelector {
 
     final SenderSelection selection = findSupportedSender(sampledSelection, phoneNumber, languageRanges);
     final boolean usedAdaptive = selection.reason().equals(SelectionReason.ADAPTIVE);
-    meterRegistry.counter(ADAPTIVE_SAMPLING_COUNTER_NAME,
+    if (meterRegistry.isPresent()) {
+      meterRegistry.get().counter(ADAPTIVE_SAMPLING_COUNTER_NAME,
         MetricsUtil.REGION_CODE_TAG_NAME, region,
         MetricsUtil.SENDER_TAG_NAME, adaptivePick,
         MetricsUtil.TRANSPORT_TAG_NAME, transport.name(),
         "enabled", Boolean.toString(usedAdaptive)).increment();
+    }
 
     return selection;
   }

@@ -2,6 +2,8 @@ package org.signal.registration.directory;
 
 import io.micronaut.context.annotation.Value;
 import jakarta.inject.Singleton;
+import io.micronaut.context.annotation.Factory;
+import jakarta.inject.Named;
 import org.signal.registration.directory.entra.EntraIdConfiguration;
 import org.signal.registration.directory.entra.EntraIdDirectoryService;
 import org.signal.registration.ldap.LdapConfiguration;
@@ -15,19 +17,13 @@ import java.util.Optional;
 /**
  * Factory for creating the appropriate DirectoryService implementation
  */
-@jakarta.inject.Singleton
+@Factory
 public class DirectoryServiceFactory {
     private static final Logger logger = LoggerFactory.getLogger(DirectoryServiceFactory.class);
 
-    private final LdapConfiguration ldapConfig;
-    private final EntraIdConfiguration entraConfig;
     private final DirectoryType directoryType;
 
-    public DirectoryServiceFactory(LdapConfiguration ldapConfig, 
-                                 EntraIdConfiguration entraConfig,
-                                 DirectoryType directoryType) {
-        this.ldapConfig = ldapConfig;
-        this.entraConfig = entraConfig;
+    public DirectoryServiceFactory(DirectoryType directoryType) {
         this.directoryType = directoryType;
     }
 
@@ -36,14 +32,30 @@ public class DirectoryServiceFactory {
      *
      * @return the configured DirectoryService implementation
      */
-    public DirectoryService createDirectoryService() {
+    @Singleton
+    public DirectoryService createDirectoryService(Optional<LdapConfiguration> ldapConfig, Optional<EntraIdConfiguration> entraConfig) {
+        logger.info("Creating directory service with type: {}", directoryType);
+        logger.info("LDAP config present: {}", ldapConfig.isPresent());
+        logger.info("Entra ID config present: {}", entraConfig.isPresent());
+
         switch (directoryType) {
             case ENTRA_ID:
+                if (entraConfig.isEmpty()) {
+                    logger.warn("Entra ID selected but configuration not available, falling back to NONE");
+                    return new NoOpDirectoryService();
+                }
                 logger.info("Using Microsoft Entra ID directory service");
-                return new EntraIdDirectoryService(entraConfig);
+                EntraIdConfiguration config = entraConfig.get();
+                logger.info("Entra ID Configuration - Tenant ID: {}, Client ID: {}, Test User: {}", 
+                          config.getTenantId(), config.getClientId(), config.getTestUser());
+                return new EntraIdDirectoryService(config);
             case LDAP:
+                if (ldapConfig.isEmpty()) {
+                    logger.warn("LDAP selected but configuration not available, falling back to NONE");
+                    return new NoOpDirectoryService();
+                }
                 logger.info("Using LDAP directory service");
-                return new LdapService(ldapConfig);
+                return new LdapService(ldapConfig.get());
             case NONE:
             default:
                 logger.info("No directory service is enabled");

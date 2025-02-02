@@ -1,5 +1,6 @@
 package org.signal.registration.ldap.controller;
 
+import io.micronaut.context.annotation.Requires;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
@@ -22,6 +23,7 @@ import java.util.Optional;
  */
 @Controller("/validate")
 @ExecuteOn(TaskExecutors.IO)
+@Requires(property = "micronaut.config.registration.directory.type", value = "LDAP")
 public class LdapValidationController {
 
     private static final Logger logger = LoggerFactory.getLogger(LdapValidationController.class);

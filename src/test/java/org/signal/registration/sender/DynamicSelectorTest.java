@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -235,13 +236,13 @@ public class DynamicSelectorTest {
     };
     final AdaptiveStrategy adaptiveStrategy = mock(AdaptiveStrategy.class);
     when(adaptiveStrategy.sample(any(), any(), any(), any(), any(), any())).thenReturn("an_adaptive_choice");
-    return new DynamicSelector(rg, new SimpleMeterRegistry(), config, adaptiveStrategy, senders);
+    return new DynamicSelector(rg, Optional.of(new SimpleMeterRegistry()), config, adaptiveStrategy, senders);
   }
 
   private static DynamicSelector buildSelector(DynamicSelectorConfiguration config, List<VerificationCodeSender> senders) {
     final AdaptiveStrategy adaptiveStrategy = mock(AdaptiveStrategy.class);
     when(adaptiveStrategy.sample(any(), any(), any(), any(), any(), any())).thenReturn("an_adaptive_choice");
-    return new DynamicSelector(new JDKRandomGenerator(), new SimpleMeterRegistry(), config, adaptiveStrategy, senders);
+    return new DynamicSelector(new JDKRandomGenerator(), Optional.of(new SimpleMeterRegistry()), config, adaptiveStrategy, senders);
   }
 
   private static VerificationCodeSender buildTestSender(final String name, final boolean supports) {

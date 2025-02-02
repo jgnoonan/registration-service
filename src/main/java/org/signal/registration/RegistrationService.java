@@ -4,46 +4,54 @@
  */
 package org.signal.registration;
 
+import com.google.i18n.phonenumbers.Phonenumber;
+import io.micronaut.context.annotation.Value;
+import io.micronaut.core.annotation.Nullable;
+import io.micronaut.scheduling.annotation.Scheduled;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
+import org.signal.registration.directory.DirectoryService;
+import org.signal.registration.directory.DirectoryServiceFactory;
+import org.signal.registration.directory.entra.EntraIdConfiguration;
+import org.signal.registration.ldap.LdapService;
+import org.signal.registration.metrics.MetricsUtil;
+import org.signal.registration.ratelimit.RateLimiter;
+import org.signal.registration.sender.ClientType;
+import org.signal.registration.sender.MessageTransport;
+import org.signal.registration.sender.SenderSelectionStrategy;
+import org.signal.registration.sender.VerificationCodeSender;
+import org.signal.registration.session.*;
+import org.signal.registration.rpc.RegistrationSessionMetadata;
+import org.signal.registration.util.CompletionExceptions;
+import org.signal.registration.util.UUIDUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import jakarta.annotation.PostConstruct;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 import static org.signal.registration.sender.SenderSelectionStrategy.SenderSelection;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;
-import com.google.i18n.phonenumbers.Phonenumber;
 import com.google.protobuf.ByteString;
 import com.unboundid.ldap.sdk.LDAPException;
-import jakarta.annotation.PostConstruct;
-import jakarta.inject.Named;
-import jakarta.inject.Singleton;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import io.micronaut.core.annotation.Nullable;
-import io.micronaut.context.annotation.Value;
 import org.apache.commons.lang3.StringUtils;
 import org.signal.registration.AuthenticationException;
 import org.signal.registration.ratelimit.RateLimitExceededException;
-import org.signal.registration.ratelimit.RateLimiter;
-import org.signal.registration.rpc.RegistrationSessionMetadata;
 import org.signal.registration.sender.AttemptData;
-import org.signal.registration.sender.ClientType;
 import org.signal.registration.sender.MessageTransport;
 import org.signal.registration.sender.SenderFraudBlockException;
 import org.signal.registration.sender.SenderRejectedRequestException;
 import org.signal.registration.sender.SenderRejectedTransportException;
-import org.signal.registration.sender.SenderSelectionStrategy;
 import org.signal.registration.sender.VerificationCodeSender;
 import org.signal.registration.session.FailedSendAttempt;
 import org.signal.registration.session.FailedSendReason;
@@ -52,12 +60,8 @@ import org.signal.registration.session.RegistrationSession;
 import org.signal.registration.session.SessionMetadata;
 import org.signal.registration.session.SessionRepository;
 import org.signal.registration.util.ClientTypes;
-import org.signal.registration.util.CompletionExceptions;
 import org.signal.registration.util.MessageTransports;
 import org.signal.registration.util.UUIDUtil;
-import org.signal.registration.directory.DirectoryService;
-import org.signal.registration.directory.DirectoryServiceFactory;
-import org.signal.registration.ldap.LdapService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +78,7 @@ public class RegistrationService {
   private final Clock clock;
   private final Map<String, VerificationCodeSender> sendersByName;
   private final DirectoryServiceFactory directoryServiceFactory;
+  private final Optional<EntraIdConfiguration> entraIdConfiguration;
   private DirectoryService directoryService;
 
   @VisibleForTesting
@@ -87,7 +92,8 @@ public class RegistrationService {
                            @Named("check-verification-code") final RateLimiter<RegistrationSession> checkVerificationCodeRateLimiter,
                            final List<VerificationCodeSender> verificationCodeSenders,
                            final Clock clock,
-                           final DirectoryServiceFactory directoryServiceFactory) {
+                           final DirectoryServiceFactory directoryServiceFactory,
+                           final Optional<EntraIdConfiguration> entraIdConfiguration) {
 
     this.senderSelectionStrategy = senderSelectionStrategy;
     this.sessionRepository = sessionRepository;
@@ -97,6 +103,7 @@ public class RegistrationService {
     this.checkVerificationCodeRateLimiter = checkVerificationCodeRateLimiter;
     this.clock = clock;
     this.directoryServiceFactory = directoryServiceFactory;
+    this.entraIdConfiguration = entraIdConfiguration;
 
     this.sendersByName = verificationCodeSenders.stream()
         .collect(Collectors.toMap(VerificationCodeSender::getName, Function.identity()));
@@ -105,7 +112,7 @@ public class RegistrationService {
   @PostConstruct
   public void initialize() {
     try {
-      directoryService = directoryServiceFactory.createDirectoryService();
+      directoryService = directoryServiceFactory.createDirectoryService(Optional.empty(), entraIdConfiguration);
       directoryService.initialize();
       LOG.info("Directory service successfully initialized");
     } catch (Exception e) {

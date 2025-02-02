@@ -277,7 +277,7 @@
     <dependency>
       <groupId>io.grpc</groupId>
       <artifactId>grpc-services</artifactId>
-
+      <version>${grpc.version}</version>
       <exclusions>
         <exclusion>
           <groupId>com.google.errorprone</groupId>
@@ -597,6 +597,8 @@
               <mainClass>com.salesforce.reactorgrpc.ReactorGrpcGenerator</mainClass>
             </protocPlugin>
           </protocPlugins>
+          <addSources>true</addSources>
+          <generateApi>true</generateApi>
         </configuration>
         <executions>
           <execution>
