@@ -103,9 +103,19 @@ public class EntraIdDirectoryService implements DirectoryService {
                         logger.info("Graph client built successfully");
 
                         // Test the connection by making a simple request
-                        logger.info("Testing connection to Microsoft Entra ID by retrieving top user");
-                        graphClient.users().buildRequest().top(1).get();
-                        logger.info("Successfully tested connection to Microsoft Entra ID");
+                        logger.info("Testing connection to Microsoft Entra ID using client credentials");
+                        try {
+                          // Just verify we can get an access token
+                          graphClient.users()
+                              .buildRequest()
+                              .select("id")
+                              .top(1)
+                              .get();
+                          logger.info("Successfully tested connection to Microsoft Entra ID");
+                        } catch (Exception e) {
+                          logger.error("Failed to test connection to Microsoft Entra ID", e);
+                          throw new RuntimeException("Failed to initialize Microsoft Entra ID service", e);
+                        }
 
                         initialized = true;
                         logger.info("EntraIdDirectoryService initialized successfully");
@@ -146,10 +156,14 @@ public class EntraIdDirectoryService implements DirectoryService {
         try {
             // First verify the user exists using client credentials (which we already have in graphClient)
             User user = graphClient.users()
-                .byId(userId)
                 .buildRequest()
-                .select("displayName,userPrincipalName,mail,mobilePhone")
-                .get();
+                .filter(String.format("userPrincipalName eq '%s'", userId))
+                .select("id,displayName,userPrincipalName,mail,mobilePhone")
+                .get()
+                .getCurrentPage()
+                .stream()
+                .findFirst()
+                .orElse(null);
 
             if (user != null) {
                 logger.info("Found user: displayName={}, userPrincipalName={}, mail={}", 

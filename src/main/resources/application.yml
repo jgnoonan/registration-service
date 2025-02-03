@@ -3,18 +3,30 @@ micronaut:
   application:
     name: registrationService
   metrics:
-    enabled: false
+    enabled: true
     export:
       datadog:
         enabled: false
-        apiKey: null
+        step: PT1M
+        descriptions: true
+        apiKey: "dummy-key-for-development"
   environments:
     development:
+      metrics:
+        enabled: false
+        export:
+          datadog:
+            enabled: false
+            step: PT1M
+            descriptions: true
+            apiKey: "dummy-key-for-development"
       micronaut:
         metrics:
+          enabled: false
           export:
             datadog:
               enabled: false
+              apiKey: null
     production:
       config:
         registration: {}

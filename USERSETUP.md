@@ -33,12 +33,22 @@ This guide explains how to set up users in Azure Active Directory (Azure AD) for
 2. Click "Add a permission"
 3. Select "Microsoft Graph"
 4. Select "Delegated permissions"
-5. Add the following permission:
-   - User.Read (allows reading user profile and phone number)
+5. Add the following permissions:
+   - User.Read (allows reading user profile)
+   - User.ReadBasic.All (allows reading basic profiles of all users)
 6. Click "Add permissions"
 7. Click "Grant admin consent" for your directory
 
-## Step 3: Create Users
+## Step 3: Enable Resource Owner Password Credentials Flow
+
+1. In the app registration, go to "Authentication"
+2. Under "Advanced settings", find "Allow public client flows"
+3. Enable "Allow public client flows"
+4. Check "Enable the following mobile and desktop flows:"
+5. Enable "Resource owner password credentials"
+6. Click "Save"
+
+## Step 4: Create Users
 
 ### Option A: Using Azure Portal (Recommended for individual users)
 
